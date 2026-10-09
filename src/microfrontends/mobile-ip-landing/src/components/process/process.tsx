@@ -2,7 +2,7 @@ import cn from 'classnames';
 import { useRef } from 'react';
 import type { CSSProperties, MouseEvent } from 'react';
 import { useHintNudge } from '../../hooks/use-hint-nudge';
-import { useScrollSteps } from '../../hooks/use-scroll-steps';
+import { SWITCH_AT, useScrollSteps } from '../../hooks/use-scroll-steps';
 import { Html, safeHref, toPlainText } from '../../lib/html';
 import { Icon } from '../icon/icon';
 import { Picture } from '../picture/picture';
@@ -60,7 +60,14 @@ export const ProcessSection = ({ id, process, onToForm }: ProcessSectionProps) =
       <div
         ref={trackRef}
         className={s.track}
-        style={{ '--aic-ip-states': statesCount, '--aic-ip-segments': segments } as CSSProperties}
+        style={
+          {
+            '--aic-ip-states': statesCount,
+            '--aic-ip-segments': segments,
+            // Доля отрезка, на которой сменяется шаг: от неё пауза подарков в треке (giftSpan).
+            '--aic-ip-switch-at': SWITCH_AT,
+          } as CSSProperties
+        }
       >
         <div ref={stageRef} className={s.stage} data-aic-ip-stage="">
           <div className={s.frame}>

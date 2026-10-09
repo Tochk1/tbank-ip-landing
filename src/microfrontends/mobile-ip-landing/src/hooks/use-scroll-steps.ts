@@ -6,18 +6,13 @@ import { prefersReducedMotion } from '../lib/motion';
  * Шаг переключается, когда пройдено 65% его отрезка: следующее состояние появляется
  * чуть раньше середины, и короткий жест прокрутки уже даёт отклик.
  */
-const SWITCH_AT = 0.65;
+export const SWITCH_AT = 0.65;
 
 /**
- * Пауза на чтение первой карточки подарков, прежде чем содержимое плашки тронется: иначе карточка
- * уезжает раньше, чем её успевают прочитать. Число — из таймингов появления, они в
- * components/process/styles.module.css: первая карточка начинает проявляться через
- * --aic-ip-gift-delay (0 мс, переход перекрёстный) + 1 × --aic-ip-gift-step (150 мс) = 150 мс,
- * становится непрозрачной ещё через --aic-ip-swap-in (400 мс) = 550 мс, а её подъём на 16px
- * заканчивается через --aic-ip-swap-rise (600 мс) = 750 мс. 1200 мс — это 750 мс плюс 450 мс, когда
- * карточка уже стоит дорисованной и неподвижной. Пауза отсчитывается по часам, а не по пройденным
- * пикселям: инерция касания за один бросок уносит больше, чем весь пробег подарков, и порогом по
- * расстоянию её не удержать.
+ * Запасной путь (браузер без scroll-driven animations, см. setGiftScroll): пауза по часам на чтение
+ * первой карточки подарков поверх паузы по прокрутке. 1200 мс = 750 мс появления карточки
+ * (задержка, проявление и подъём из таймингов в process/styles.module.css) + 450 мс неподвижности.
+ * По часам, а не по пикселям: инерция касания за один бросок уносит больше всего пробега подарков.
  */
 const GIFT_READ_MS = 1200;
 
@@ -37,6 +32,23 @@ const KEYBOARD_MIN = 160;
 const keyboardUp = (): boolean => {
   const view = typeof window === 'undefined' ? null : window.visualViewport;
   return Boolean(view) && window.innerHeight - (view as VisualViewport).height > KEYBOARD_MIN;
+};
+
+/**
+ * Умеет ли браузер CSS scroll-driven animations (animation-timeline: scroll()). Проверяется
+ * способность, а не платформа: тогда наезд плашки ведёт сам браузер в потоке прокрутки, без
+ * отставания на кадр, как у скрипта по событию scroll.
+ */
+const scrollDrivenSupported = (): boolean =>
+  typeof CSS !== 'undefined' &&
+  typeof CSS.supports === 'function' &&
+  CSS.supports('animation-timeline: scroll()');
+
+/** Сдвиг элемента по вертикали его собственным transform, px (толчок-подсказка, «потянуть»). */
+const ownShiftY = (element: Element): number => {
+  const { transform } = getComputedStyle(element);
+  if (!transform || transform === 'none' || typeof DOMMatrixReadOnly === 'undefined') return 0;
+  return new DOMMatrixReadOnly(transform).m42;
 };
 
 /** Постоянная сближения содержимого подарков с целью: на 1 − 1/e пути за столько мс. */
@@ -60,24 +72,21 @@ const GIFT_MAX_STEP = 9;
 const GIFT_MAX_JUMP = 18;
 
 /**
- * Экран подарков: плашка с вкладкой и заголовком стоит, листается её содержимое (подарки, «Остались
- * вопросы?», кнопка). Листает сама прокрутка страницы: после шагов в треке есть пробег подарков —
- * max(отрезок, переполнение содержимого в px окна), CSS берёт переполнение из --aic-ip-gift-run.
- * Пока сцена идёт по этому пробегу, содержимое сдвигается вверх. Своего контейнера прокрутки нет,
- * поэтому колесо и касание не залипают: долистали — страница едет дальше, обратно — сначала
- * содержимое к началу, потом шаги. Если содержимое влезает, подарки стоят один отрезок.
- *
- * Содержимое растягивается на ВЕСЬ пробег (span), а не на своё переполнение (run): пробег — это то,
- * что трек под экран подарков уже зарезервировал, и экран подарков стоит столько же прокрутки,
- * сколько любой шаг. При делении на run короткое содержимое пролистывалось бы до кнопки за малую
- * долю пробега. Когда содержимое длиннее отрезка, span = run и ход снова ровно вровень с
- * прокруткой.
+ * Экран подарков: плашка стоит, листается её содержимое, и листает сама прокрутка страницы — своего
+ * контейнера прокрутки нет, колесо и касание не залипают. Отрезок подарков = пауза (SWITCH_AT
+ * отрезка, первая карточка стоит) + ход max(остаток отрезка, переполнение). Пауза по прокрутке, а
+ * не по часам: содержимое не едет само, когда палец уже стоит. Та же формула в CSS.
  */
 const giftSpan = (total: number, states: number, run: number) => {
-  // Пробег трека = (состояния − 1) × отрезок + max(отрезок, run).
+  // Пробег трека = (состояния − 1) × отрезок + SWITCH_AT × отрезок + max((1 − SWITCH_AT) × отрезок,
+  // run).
   const even = states > 0 ? total / states : 0;
-  if (run <= even || states <= 1) return { segment: even, span: even };
-  return { segment: (total - run) / (states - 1), span: run };
+  const rest = 1 - SWITCH_AT;
+  const segment =
+    run <= rest * even || states <= 1 ? even : (total - run) / (states - 1 + SWITCH_AT);
+  const pause = SWITCH_AT * segment;
+  const travel = Math.max(rest * segment, run);
+  return { segment, pause, travel, span: pause + travel };
 };
 
 /**
@@ -154,12 +163,18 @@ export const useScrollSteps = (statesCount: number, withCta: boolean) => {
     // Пробег в CSS-пикселях, прямоугольники — в экранных: при zoom хоста приводим к ним.
     const zoom = stage.offsetHeight > 0 ? stageRect.height / stage.offsetHeight : 1;
     const run = (parseFloat(track.style.getPropertyValue('--aic-ip-gift-run')) || 0) * zoom;
-    const { segment, span } = giftSpan(trackRect.height - stageRect.height, statesCount, run);
+    const { segment, pause, travel, span } = giftSpan(
+      trackRect.height - stageRect.height,
+      statesCount,
+      run
+    );
     return {
       stage,
       trackRect,
       stageRect,
       segment,
+      pause,
+      travel,
       span,
       run,
       shifted: stageRect.top - trackRect.top,
@@ -176,6 +191,9 @@ export const useScrollSteps = (statesCount: number, withCta: boolean) => {
       return undefined;
     }
     scrollerRef.current = container;
+    // Наезд ведёт браузер, только когда прокручивается сам документ: анимация привязана к
+    // scroll(root). В контейнере прокрутки хоста наезд ведёт скрипт.
+    const driven = !container && scrollDrivenSupported();
 
     const card = cardRef.current;
     const frameNode = card?.offsetParent;
@@ -322,23 +340,52 @@ export const useScrollSteps = (statesCount: number, withCta: boolean) => {
         giftAt = 0;
       }
     };
+    type GiftGeometry = {
+      trackRect: DOMRect;
+      stage: HTMLElement;
+      shifted: number;
+      segment: number;
+      pause: number;
+      travel: number;
+    };
     /**
-     * Куда едет содержимое плашки на экране подарков: доля пройденного ПРОБЕГА подарков (span — то,
-     * что трек под этот экран зарезервировал), умноженная на переполнение. Пробег начинается в
-     * конце отрезка перехода к подаркам. Пауза на чтение заводится только при входе спереди (доля
-     * ещё 0): когда на подарки возвращаются снизу, первая карточка не читается и держать содержимое
-     * незачем. При reduced motion ни паузы, ни сближения: сдвиг ставится сразу.
+     * Сдвиг содержимого на экране подарков: доля пройденного хода (после паузы, см. giftSpan),
+     * умноженная на переполнение. При поддержке scroll-driven animations ход ведёт CSS, а скрипт
+     * ставит только границы (--aic-ip-gift-from/-to) и переполнение (--aic-ip-gift-max). Иначе
+     * скрипт пишет --aic-ip-gift-scroll со сближением по времени (easeGift); при reduced motion —
+     * без паузы и сближения.
      */
-    const setGiftScroll = (
-      geometry: { shifted: number; segment: number; span: number },
-      inGift: boolean
-    ) => {
+    const setGiftScroll = (geometry: GiftGeometry, inGift: boolean) => {
       const start = (statesCount - 1) * geometry.segment;
+      // Последний пиксель хода — уже конец: прокрутка целая, а трек дробный, и без этого содержимое
+      // не доезжало бы в конце на доли пикселя.
+      const reach = Math.max(1, geometry.travel - 1);
       const share =
-        inGift && geometry.span > 0
-          ? Math.min(1, Math.max(0, (geometry.shifted - start) / geometry.span))
+        inGift && geometry.travel > 0
+          ? Math.min(1, Math.max(0, (geometry.shifted - start - geometry.pause) / reach))
           : 0;
       giftTarget = Math.round(share * overflow * 10) / 10;
+      if (driven && root) {
+        // Позиция прокрутки документа, на которой сцена сдвинута в треке на 0 (как в goTo).
+        const zoom =
+          geometry.stage.offsetHeight > 0
+            ? geometry.stage.getBoundingClientRect().height / geometry.stage.offsetHeight
+            : 1;
+        const stickTop = (parseFloat(getComputedStyle(geometry.stage).top) || 0) * zoom;
+        const base =
+          geometry.trackRect.top - (section ? ownShiftY(section) : 0) + window.scrollY - stickTop;
+        const from = base + start + geometry.pause;
+        setRoot('--aic-ip-gift-from', scrollPx(from));
+        setRoot('--aic-ip-gift-to', scrollPx(from + reach));
+        set('--aic-ip-gift-max', `${overflow}px`);
+        if (giftFrame) window.cancelAnimationFrame(giftFrame);
+        giftFrame = 0;
+        giftShift = giftTarget;
+        if (geometry.stage.style.getPropertyValue('--aic-ip-gift-scroll')) {
+          geometry.stage.style.removeProperty('--aic-ip-gift-scroll');
+        }
+        return;
+      }
       if (reduced) {
         writeGift(giftTarget);
         return;
@@ -376,13 +423,14 @@ export const useScrollSteps = (statesCount: number, withCta: boolean) => {
       else if (rect.top < top) delta = rect.top - top;
       // Считаем от цели, а не от текущего сдвига: содержимое может ещё догонять (easeGift).
       const shift = Math.min(overflow, Math.max(0, giftTarget + delta / k));
-      delta = (shift - giftTarget) * k;
-      if (Math.abs(delta) < 1) return;
+      if (Math.abs((shift - giftTarget) * k) < 1) return;
       const geometry = measure();
-      if (!geometry || geometry.span <= 0) return;
-      // Сдвиг на экране (delta) — доля переполнения на экране — столько же доли пробега.
+      if (!geometry || geometry.travel <= 0) return;
+      // Нужный сдвиг — доля переполнения — столько же доли хода после паузы (giftSpan).
+      const start = (statesCount - 1) * geometry.segment + geometry.pause;
+      const want = start + (shift / overflow) * Math.max(1, geometry.travel - 1);
       const options: ScrollToOptions = {
-        top: (delta / (overflow * k)) * geometry.span,
+        top: shift > 0 ? want - geometry.shifted : Math.min(0, start - geometry.shifted),
         behavior: 'auto',
       };
       // Фокус с клавиатуры снимает паузу на чтение: пользователь сам выбрал, куда смотреть.
@@ -448,7 +496,40 @@ export const useScrollSteps = (statesCount: number, withCta: boolean) => {
      * data-aic-ip-covered — форма под плашкой. Край ищется в каждом кадре: слот формы банка может
      * появиться и смениться после монтирования.
      */
-    const setReveal = (morph: number, sectionTop: number) => {
+    const setRoot = (name: string, value: string) => {
+      if (root && root.style.getPropertyValue(name) !== value) root.style.setProperty(name, value);
+    };
+    /** Позиция прокрутки в px с точностью до сотой: границы диапазонов анимации. */
+    const scrollPx = (value: number) => `${Math.round(value * 100) / 100}px`;
+    /**
+     * Производные reveal (фон второго экрана, гашение заголовка, вкладка) тоже ведёт браузер, пока
+     * reveal — линейная функция прокрутки, то есть пока первый экран закреплён. Начало отрезка —
+     * где верх плашки дошёл до края формы: t0 = (край − место плашки) × окно / (окно − morphD),
+     * край — в закреплённом положении. Под экранной клавиатурой ведёт скрипт. Возвращает, ведёт ли
+     * браузер.
+     */
+    const setRevealRange = (edge: Element | null, finalTop: number, morphAt: number) => {
+      const hero = edge?.closest('section');
+      if (!edge || !hero || viewportH <= morphD) return false;
+      const scroller = scrollerRef.current;
+      const origin = scroller ? scroller.getBoundingClientRect().top + scroller.clientTop : 0;
+      const stick = (parseFloat(getComputedStyle(hero).top) || 0) + origin;
+      const edgePinned =
+        edge.getBoundingClientRect().top - hero.getBoundingClientRect().top + stick;
+      const span = edgePinned - finalTop;
+      if (span <= 1) return false;
+      setRoot(
+        '--aic-ip-reveal-from',
+        scrollPx(morphAt - (span * viewportH) / (viewportH - morphD))
+      );
+      return true;
+    };
+    /**
+     * Контракт с хостом (INTEGRATION.md, п. 9): --aic-ip-reveal и data-aic-ip-covered на корне
+     * пишет скрипт при любом пути. morphAt — позиция прокрутки документа, на которой наезд
+     * кончается (только когда его ведёт браузер, иначе null).
+     */
+    const setReveal = (morph: number, sectionTop: number, morphAt: number | null) => {
       if (!root || !card) return;
       const edge = root.querySelector('[data-aic-ip-cover-edge]');
       const focused = Boolean(edge?.contains(document.activeElement));
@@ -458,29 +539,53 @@ export const useScrollSteps = (statesCount: number, withCta: boolean) => {
       // по самому фокусу: поле с фокусом не прячем, даже когда клавиатура закрыта.
       setLift(edge, focused && keyboardUp(), cardTop);
       let reveal = morph;
+      const finalTop = cardTop - sectionTop + morphD * (1 - morph);
       if (edge) {
         const edgeTop = edge.getBoundingClientRect().top;
-        const finalTop = cardTop - sectionTop + morphD * (1 - morph);
         const span = edgeTop - finalTop;
         reveal = span > 1 ? (edgeTop - cardTop) / span : Number(cardTop <= edgeTop);
       }
       const value = String(Math.round(Math.min(1, Math.max(0, reveal)) * 1000) / 1000);
-      if (root.style.getPropertyValue('--aic-ip-reveal') !== value) {
-        root.style.setProperty('--aic-ip-reveal', value);
-      }
+      setRoot('--aic-ip-reveal', value);
       root.toggleAttribute('data-aic-ip-covered', value !== '0' && !focused);
+      if (morphAt === null) return;
+      // Место плашки (finalTop) верно, только пока сцена не прилипла (morph < 1): дальше раздел
+      // уходит вверх, а карточка стоит. Тогда граница остаётся прежней; reveal там и так 1.
+      const current = root.getAttribute('data-aic-ip-scroll-driven');
+      let mode = current ?? '';
+      if (hold || lift > 0) mode = '';
+      else if (morph < 1) mode = setRevealRange(edge, finalTop, morphAt) ? 'reveal' : '';
+      if (current !== mode) {
+        root.setAttribute('data-aic-ip-scroll-driven', mode);
+      }
     };
+    /**
+     * Наезд. Без поддержки scroll-driven скрипт пишет --aic-ip-morph, и CSS двигает карточку. С
+     * поддержкой карточку двигает CSS-анимация на scroll(root), а скрипт ставит только границы
+     * диапазона (--aic-ip-morph-from/-to), которые меняются лишь при смене раскладки. Собственный
+     * transform раздела (толчок-подсказка) из границ вычтен: прокрутку он не меняет.
+     */
     const setMorph = (trackTop: number) => {
       if (!section || viewportH <= 0) return;
       const scroller = scrollerRef.current;
       const origin = scroller ? scroller.getBoundingClientRect().top + scroller.clientTop : 0;
       const top = Math.min(viewportH, Math.max(0, trackTop - origin));
       const morph = Math.round((1 - top / viewportH) * 1000) / 1000;
-      const value = String(morph);
-      if (section.style.getPropertyValue('--aic-ip-morph') !== value) {
-        section.style.setProperty('--aic-ip-morph', value);
+      let morphAt: number | null = null;
+      // Без корня и карточки скрипт не поставит режим (setReveal), и CSS-анимация не включится:
+      // тогда и наезд остаётся за скриптом.
+      if (driven && root && card) {
+        morphAt = trackTop - ownShiftY(section) + window.scrollY;
+        setRoot('--aic-ip-morph-from', scrollPx(morphAt - viewportH));
+        setRoot('--aic-ip-morph-to', scrollPx(morphAt));
+        section.style.removeProperty('--aic-ip-morph');
+      } else {
+        const value = String(morph);
+        if (section.style.getPropertyValue('--aic-ip-morph') !== value) {
+          section.style.setProperty('--aic-ip-morph', value);
+        }
       }
-      setReveal(morph, section.getBoundingClientRect().top - origin);
+      setReveal(morph, section.getBoundingClientRect().top - origin, morphAt);
     };
     const schedule = () => {
       if (!frame) frame = window.requestAnimationFrame(update);
@@ -521,6 +626,8 @@ export const useScrollSteps = (statesCount: number, withCta: boolean) => {
       window.removeEventListener('resize', requestLayout);
       window.visualViewport?.removeEventListener('resize', schedule);
       observer?.disconnect();
+      // Без скрипта наезд снова ведёт переменная: CSS-анимация выключается вместе с режимом.
+      root?.removeAttribute('data-aic-ip-scroll-driven');
       if (frame) window.cancelAnimationFrame(frame);
       if (giftFrame) window.cancelAnimationFrame(giftFrame);
     };

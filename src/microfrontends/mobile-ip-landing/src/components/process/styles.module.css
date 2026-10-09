@@ -162,12 +162,10 @@
 
 /*
  * Трек: сцена и распорка с отрезком прокрутки на каждый переход шагов (--aic-ip-segments) и
- * пробегом подарков: max(отрезок, переполнение содержимого плашки), переполнение в px окна
- * ставит скрипт (--aic-ip-gift-run, hooks/use-scroll-steps.ts, giftSpan). Отрезок — 70% высоты
- * окна, он задан только здесь; скрипт читает его из DOM. vh — фолбэк для браузеров без svh.
- * Содержимое подарков растягивается на весь этот пробег: экран подарков стоит столько же
- * прокрутки, сколько любой шаг.
- * Распорка, а не padding: залипающая сцена ограничена контентной областью родителя.
+ * отрезком подарков = пауза (SWITCH_AT отрезка) + ход max(остаток отрезка, переполнение);
+ * переполнение ставит скрипт (--aic-ip-gift-run). Отрезок — 70% высоты окна (vh — фолбэк без svh),
+ * задан только здесь, скрипт читает его из DOM. Распорка, а не padding: sticky-сцена ограничена
+ * контентом родителя.
  */
 .track {
   position: relative;
@@ -176,7 +174,10 @@
 
 .track::after {
   display: block;
-  height: calc(var(--aic-ip-segments) * 70vh + max(70vh, var(--aic-ip-gift-run, 0px)));
+  height: calc(
+    var(--aic-ip-segments) * 70vh + var(--aic-ip-switch-at) * 70vh +
+      max((1 - var(--aic-ip-switch-at)) * 70vh, var(--aic-ip-gift-run, 0px))
+  );
   content: '';
 }
 
@@ -217,7 +218,10 @@
  */
 @supports (height: 100svh) {
   .track::after {
-    height: calc(var(--aic-ip-segments) * 70svh + max(70svh, var(--aic-ip-gift-run, 0px)));
+    height: calc(
+      var(--aic-ip-segments) * 70svh + var(--aic-ip-switch-at) * 70svh +
+        max((1 - var(--aic-ip-switch-at)) * 70svh, var(--aic-ip-gift-run, 0px))
+    );
   }
 
   .stage {
@@ -315,13 +319,10 @@
 }
 
 /*
- * Окно содержимого плашки: колода или подарки и кнопка. В шагах оно тянется до низа плашки. На
- * экране подарков плашка стоит: окно закреплено на высоте из шагов (--aic-ip-view-h), обрезает
- * содержимое, а содержимое сдвигается вверх по прокрутке страницы (--aic-ip-gift-scroll, px макета;
- * hooks/use-scroll-steps.ts). Сдвиг растянут на весь пробег, который трек отвёл экрану подарков,
- * идёт с паузой на чтение первой карточки (GIFT_READ_MS) и догоняет прокрутку за время, а не рывком
- * (GIFT_EASE_MS, GIFT_MAX_STEP). Окно заходит в поля плашки (их возвращает padding), чтобы дорожка
- * индикатора, вынесенная влево за край содержимого (.progress), не обрезалась краем окна.
+ * Окно содержимого плашки (колода или подарки и кнопка); в шагах тянется до низа плашки. На экране
+ * подарков плашка стоит: окно закреплено на высоте из шагов (--aic-ip-view-h), а содержимое
+ * сдвигается по прокрутке (--aic-ip-gift-scroll); ход ведёт CSS-анимация на scroll(root), без неё —
+ * скрипт. Окно заходит в поля плашки, чтобы не обрезать вынесенную влево дорожку индикатора.
  */
 .scroller {
   position: relative;
@@ -1056,6 +1057,129 @@
   align-self: center;
   margin-inline: 0;
   transform: translateY(calc(var(--aic-ip-tab-overlap) * (1 - var(--aic-ip-reveal, 0))));
+}
+
+/*
+ * Наезд плашки ведёт браузер: сдвиг от скрипта по событию scroll приходит на кадр позже прокрутки,
+ * и при инерции пальца плашка замирает и прыгает. При поддержке scroll-driven animations сдвиг и
+ * --aic-ip-morph идут анимацией на scroll(root) по границам и режиму из hooks/use-scroll-steps.ts.
+ * Только под @supports: без поддержки animation с fill both встала бы в конечный кадр.
+ */
+@property --aic-ip-morph {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+@keyframes morph-shift {
+  from {
+    transform: translateY(
+      calc(
+        -1 *
+          var(
+            --aic-ip-morph-d,
+            calc(
+              var(--aic-ip-header) + (var(--aic-ip-stage-gap) + var(--aic-ip-tab-overlap)) *
+                var(--aic-ip-scale, 1) + var(--aic-ip-shift, 0px) + var(--aic-ip-peek-h)
+            )
+          )
+      )
+    );
+  }
+
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes morph-share {
+  from {
+    --aic-ip-morph: 0;
+  }
+
+  to {
+    --aic-ip-morph: 1;
+  }
+}
+
+/*
+ * Производные reveal (вкладка, заголовок) ведёт зарегистрированное число --aic-ip-reveal-css, а не
+ * анимация transform или opacity: та вынесла бы их в свой слой, и при масштабе меньше 1 Chrome
+ * растеризует его мягче. Сама --aic-ip-reveal не регистрируется: её читает хост (INTEGRATION.md, п.
+ * 9).
+ */
+@property --aic-ip-reveal-css {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+@keyframes reveal-share {
+  from {
+    --aic-ip-reveal-css: 0;
+  }
+
+  to {
+    --aic-ip-reveal-css: 1;
+  }
+}
+
+@supports (animation-timeline: scroll()) {
+  /*
+   * Сдвиг — на сцене, масштаб остаётся на кадре статичным: анимация transform выносит элемент в
+   * свой слой, и при масштабе меньше 1 Chrome растеризует текст мягче. Номер шага сдвиг сцены не
+   * трогает: пока он не 0, сцена ещё не прилипла и шаг первый.
+   */
+  [data-aic-ip-scroll-driven] .process:not(.list) .stage {
+    animation: morph-shift linear both;
+    animation-timeline: scroll(root);
+    animation-range: var(--aic-ip-morph-from) var(--aic-ip-morph-to);
+  }
+
+  [data-aic-ip-scroll-driven] .process:not(.list) .frame {
+    transform: scale(var(--aic-ip-scale, 1));
+    animation: morph-share linear both;
+    animation-timeline: scroll(root);
+    animation-range: var(--aic-ip-morph-from) var(--aic-ip-morph-to);
+  }
+
+  [data-aic-ip-scroll-driven='reveal'] .process:not(.list) .tab {
+    transform: translateY(calc(var(--aic-ip-tab-overlap) * (1 - var(--aic-ip-reveal-css))));
+    animation: reveal-share linear both;
+    animation-timeline: scroll(root);
+    animation-range: var(--aic-ip-reveal-from) var(--aic-ip-morph-to);
+  }
+}
+
+/*
+ * Ход подарков ведёт браузер: при быстром броске пальца скрипт догонял прокрутку по времени уже
+ * после остановки, и содержимое дёргалось. При поддержке scroll-driven animations
+ * --aic-ip-gift-scroll идёт от 0 до --aic-ip-gift-max на отрезке [--aic-ip-gift-from,
+ * --aic-ip-gift-to]. Анимируется зарегистрированная переменная, а не transform: слой с масштабом
+ * меньше 1 Chrome рисует мягче.
+ */
+@property --aic-ip-gift-scroll {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
+@keyframes gift-share {
+  from {
+    --aic-ip-gift-scroll: 0px;
+  }
+
+  to {
+    --aic-ip-gift-scroll: var(--aic-ip-gift-max, 0px);
+  }
+}
+
+@supports (animation-timeline: scroll()) {
+  [data-aic-ip-scroll-driven] .process:not(.list) .scroller-gift {
+    animation: gift-share linear both;
+    animation-timeline: scroll(root);
+    animation-range: var(--aic-ip-gift-from) var(--aic-ip-gift-to);
+  }
 }
 
 /* Корешок здесь — прозрачная зона клика и фокуса поверх верха карточки, текст для чтения вслух. */

@@ -61,6 +61,40 @@
 }
 
 /*
+ * Фон второго экрана и гашение заголовка (.title ниже) при поддержке scroll-driven animations ведёт
+ * браузер анимацией на scroll(root) на отрезке [--aic-ip-reveal-from, --aic-ip-morph-to]; режим
+ * включает скрипт атрибутом data-aic-ip-scroll-driven="reveal" на корне. Переменная --aic-ip-reveal
+ * на корне остаётся: её читает шапка хоста (INTEGRATION.md, п. 9).
+ */
+/* --aic-ip-reveal-css зарегистрировано в process/styles.module.css (там же почему число). */
+@keyframes reveal-share {
+  from {
+    --aic-ip-reveal-css: 0;
+  }
+
+  to {
+    --aic-ip-reveal-css: 1;
+  }
+}
+
+@supports (animation-timeline: scroll()) {
+  [data-aic-ip-scroll-driven='reveal'] .hero {
+    animation: reveal-share linear both;
+    animation-timeline: scroll(root);
+    animation-range: var(--aic-ip-reveal-from) var(--aic-ip-morph-to);
+  }
+
+  [data-aic-ip-scroll-driven='reveal'] .hero::after {
+    opacity: var(--aic-ip-reveal-css);
+  }
+
+  [data-aic-ip-scroll-driven='reveal'] .title {
+    opacity: calc(1 - var(--aic-ip-reveal-css));
+    filter: blur(calc(var(--aic-ip-reveal-css) * 8px));
+  }
+}
+
+/*
  * Форма и плашки целиком под белой плашкой второго раздела: не ловят ни курсор, ни фокус
  * с клавиатуры. Атрибут ставит hooks/use-scroll-steps.ts, пока плашка выше края формы и фокус
  * не в форме: поле с фокусом не прячется, иначе фокус слетел бы.
