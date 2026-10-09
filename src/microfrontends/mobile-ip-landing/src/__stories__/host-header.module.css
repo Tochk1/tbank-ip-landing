@@ -1,0 +1,68 @@
+/*
+ * Заглушка шапки хоста: липкая. Блок её не рисует, а только оставляет под неё место отступом
+ * --aic-ip-header. В верху страницы прозрачная; слой ::before повторяет фон второго экрана
+ * (сплошной бежевый) и проявляется вместе с ним по --aic-ip-reveal (переменные ставит
+ * host-header.tsx). Размеры и места логотипов взяты из макета, см. host-header.tsx.
+ */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  box-sizing: border-box;
+  background-color: rgba(241, 238, 232, 0);
+}
+
+/*
+ * Подложка над первым экраном: бежевый цвет верха первого экрана (#f1eee8), появляется, как
+ * только страница прокручена. Снизу мягкий край 24px вместо шва. Над вторым экраном её
+ * закрывает слой ::before, а мягкий край гаснет вместе с его проявлением.
+ */
+.header[data-scrolled] {
+  background-color: rgba(241, 238, 232, 1);
+}
+
+.header::after {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  height: 24px;
+  content: '';
+  background: linear-gradient(rgba(241, 238, 232, 1), rgba(241, 238, 232, 0));
+  opacity: 0;
+  pointer-events: none;
+}
+
+.header[data-scrolled]::after {
+  opacity: calc(1 - var(--aic-ip-host-under, 0));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .header {
+    transition: background-color 150ms ease;
+  }
+
+  .header::after {
+    transition: opacity 150ms ease;
+  }
+}
+
+.header::before {
+  position: absolute;
+  inset: 0;
+  content: '';
+  background-color: var(--aic-ip-host-stage-color, transparent);
+  background-image: var(--aic-ip-host-stage-image, none);
+  background-repeat: no-repeat;
+  opacity: var(--aic-ip-host-under, 0);
+}
+
+.logo-first {
+  position: absolute;
+  top: 15px;
+  left: 50%;
+  display: block;
+  width: 30px;
+  height: 35px;
+  transform: translateX(-50%);
+}

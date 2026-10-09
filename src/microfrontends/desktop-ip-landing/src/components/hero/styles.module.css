@@ -1,0 +1,220 @@
+/*
+ * По макету (окно 1470x900) первый экран вместе с корешком следующего блока занимает окно под
+ * шапкой хоста. Место под содержимое — окно − шапка − корешок (--aic-ip-peek-h); отступы макета:
+ * 18px над заголовком, 70px до формы, 110px над корешком. На коротком окне отступы сжимаются до 8px
+ * (как между формой и плашками), потом содержимое масштабируется (hooks/use-first-screen-fit.ts).
+ * При окне высотой 900 всё как в макете.
+ */
+.hero {
+  --aic-ip-hero-gap-top: 18px;
+  --aic-ip-hero-gap-mid: 70px;
+  --aic-ip-hero-gap-bottom: 110px;
+  --aic-ip-hero-gap-min: 8px;
+  /* Лимоны у формы: композиция 912x431, её угол на 91px левее и 59px выше карточки формы. */
+  --aic-ip-lemons-x: -91px;
+  --aic-ip-lemons-y: -59px;
+  --aic-ip-lemons-w: 912px;
+  --aic-ip-lemons-h: 431px;
+
+  /*
+   * Как на мобайле: первый экран стоит на месте, белая плашка второго раздела наезжает на него
+   * снизу. Экран закреплён под шапкой хоста на всё время блока, раздел шагов идёт поверх (он позже
+   * в потоке). Если экран выше окна (масштаб у предела), он сначала прокручивается до своего низа:
+   * top = min(шапка, окно − высота экрана), --aic-ip-hero-h ставит hooks/use-first-screen-fit.ts. В
+   * статичной раскладке шагов закрепление не срабатывает. Пока фокус в форме, экран идёт вместе с
+   * документом (--aic-ip-hero-lift, ставит hooks/use-scroll-steps.ts): плашка не наезжает на поле с
+   * фокусом.
+   */
+  position: sticky;
+  top: calc(
+    min(var(--aic-ip-header), calc(100vh - var(--aic-ip-hero-h, 0px))) -
+      var(--aic-ip-hero-lift, 0px)
+  );
+  box-sizing: border-box;
+  display: flex;
+  min-height: calc(100vh - var(--aic-ip-header));
+  flex-direction: column;
+  align-items: center;
+  padding: 0 0 var(--aic-ip-peek-h);
+  /* По умолчанию фон обрезан по верху блока; под шапку заходит только с bleedUnderHeader. */
+  overflow: hidden;
+  background-color: var(--aic-ip-beige);
+}
+
+/*
+ * Фон второго экрана поверх первого: сплошной бежевый, без свечения. Проявляется, когда от первого
+ * экрана видно только заголовок (--aic-ip-reveal, 0..1, ставит hooks/use-scroll-steps.ts на корень
+ * блока), и прячет лимоны по бокам от плашки. Сцена шагов прозрачная, поэтому этот слой и есть фон
+ * второго экрана. Начинается от верха окна, как фон с bleedUnderHeader; без него верх обрезан краем
+ * экрана.
+ */
+.hero::after {
+  position: absolute;
+  top: calc(-1 * var(--aic-ip-header));
+  right: 0;
+  bottom: 0;
+  left: 0;
+  content: '';
+  background: var(--aic-ip-beige);
+  opacity: var(--aic-ip-reveal, 0);
+  pointer-events: none;
+}
+
+/*
+ * Форма и плашки целиком под белой плашкой второго раздела: не ловят ни курсор, ни фокус
+ * с клавиатуры. Атрибут ставит hooks/use-scroll-steps.ts, пока плашка выше края формы и фокус
+ * не в форме: поле с фокусом не прячется, иначе фокус слетел бы.
+ */
+[data-aic-ip-covered] .form-card,
+[data-aic-ip-covered] .benefits,
+[data-aic-ip-covered] .lemons {
+  visibility: hidden;
+}
+
+/* Фон под шапкой до верха окна, как в макете: только по явному пропу (условия в types.ts). */
+.hero-bleed {
+  overflow-x: clip;
+  overflow-y: visible;
+}
+
+.content {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  padding-top: calc(
+    var(--aic-ip-hero-gap-min) + (var(--aic-ip-hero-gap-top) - var(--aic-ip-hero-gap-min)) *
+      var(--aic-ip-hero-gaps, 1)
+  );
+  /* transform не меняет место в потоке: лишнюю высоту снимает отрицательное поле. */
+  margin-bottom: calc(var(--aic-ip-hero-content-h, 0px) * (var(--aic-ip-hero-scale, 1) - 1));
+  transform: scale(var(--aic-ip-hero-scale, 1));
+  transform-origin: 50% 0;
+}
+
+/* Композиция лимонов под формой и плашками; плашки размывают её, как в макете. */
+.lemons {
+  position: absolute;
+  top: var(--aic-ip-lemons-y);
+  left: var(--aic-ip-lemons-x);
+  width: var(--aic-ip-lemons-w);
+  height: var(--aic-ip-lemons-h);
+  pointer-events: none;
+}
+
+.title {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 626px; /* блок заголовка 626x100 */
+  margin: 0;
+  /*
+   * Когда от первого экрана видно только заголовок, он уходит через прозрачность с размытием,
+   * как на мобайле. Ведёт прокрутка, а не время: при reduced motion скачка нет.
+   */
+  opacity: calc(1 - var(--aic-ip-reveal, 0));
+  filter: blur(calc(var(--aic-ip-reveal, 0) * 8px));
+  font-family: var(--aic-ip-font-heading);
+  font-size: 50px;
+  font-weight: 500;
+  line-height: 1;
+  text-align: center;
+  letter-spacing: -1.5px; /* трекинг −1.5px по макету */
+  color: var(--aic-ip-ink);
+}
+
+.offer {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  width: 732px;
+  flex-direction: column;
+  gap: 8px;
+  /* По макету форма на 70px ниже заголовка; на коротком окне меньше. */
+  margin-top: calc(
+    var(--aic-ip-hero-gap-min) + (var(--aic-ip-hero-gap-mid) - var(--aic-ip-hero-gap-min)) *
+      var(--aic-ip-hero-gaps, 1)
+  );
+}
+
+.form-card {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 32px;
+  padding: 24px 80px; /* поля 572px шириной */
+  background: var(--aic-ip-white);
+  border-radius: 28px;
+}
+
+.form-title {
+  box-sizing: border-box;
+  max-width: 544px;
+  margin: 0;
+  font-family: var(--aic-ip-font-heading);
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1;
+  text-align: center;
+  color: var(--aic-ip-ink);
+}
+
+.form-slot {
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.form-slot:empty {
+  display: none;
+}
+
+.benefits {
+  position: relative;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.benefit {
+  box-sizing: border-box;
+  display: flex;
+  min-height: 94px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 16px;
+  backdrop-filter: blur(35px);
+}
+
+/*
+ * Кегль 15px с интервалом 20px. Размер — общий токен основного текста карт (--aic-ip-text-body), от
+ * него же считается предел масштаба (lib/fit.ts), поэтому сноска сжимается вместе с соседним
+ * текстом. Поправка базовой линии взята по этому кеглю: 15px и начертание 500 — это
+ * --aic-ip-text-drop плюс --aic-ip-text-shift-500, как у сноски и подписи во втором экране.
+ */
+.benefit-text {
+  position: relative;
+  top: var(--aic-ip-text-drop);
+  left: var(--aic-ip-text-shift-500);
+  font-family: var(--aic-ip-font-text);
+  font-size: var(--aic-ip-text-body); /* основной текст карт, от него предел масштаба */
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--aic-ip-graphite);
+}
+
+.benefit-icon {
+  flex: none;
+  color: var(--aic-ip-ink);
+}

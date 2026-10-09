@@ -1,0 +1,36 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "lib": ["DOM", "ES2015", "ES2016", "ES2017", "ES2018", "ES2019"],
+    "baseUrl": "../src",
+    "skipLibCheck": true,
+    "target": "ES2019",
+    "module": "ESNext",
+    "jsx": "react-jsx",
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "downlevelIteration": true,
+    "strictNullChecks": true,
+    "moduleResolution": "Node",
+    "importHelpers": true,
+    "resolveJsonModule": true,
+    "alwaysStrict": true,
+    "strictBindCallApply": true,
+    "isolatedModules": true,
+    "strict": true,
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
+    "noImplicitThis": true,
+    "noUncheckedIndexedAccess": true
+  },
+  "include": [
+    "../src/**/*.tsx",
+    "../src/**/*.ts",
+    "../src/**/*.stories.tsx",
+    "../src/**/*.stories.ts",
+    "../src/typings.d.ts"
+  ],
+  "exclude": ["node_modules/*", "public/**/*", "../src/microfrontends/_template/**/*"]
+}

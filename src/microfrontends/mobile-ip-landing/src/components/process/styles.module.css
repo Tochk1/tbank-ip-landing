@@ -1,0 +1,1161 @@
+/*
+ * Размеры по макету для окна 402x740 без статус-бара: три шага и экран подарков. Числа без
+ * комментария — размеры элементов из макета.
+ */
+.process {
+  --aic-ip-stage-gap: 6px; /* вкладка на y70 при шапке хоста 64px */
+  /* Макет второго экрана нарисован под окно 402x740 (без статус-бара и тулбара Safari) с шапкой
+     хоста 64px. */
+  --aic-ip-design-viewport: 740px;
+  --aic-ip-design-header: 64px;
+  --aic-ip-tab-overlap: 64px; /* вкладка y70..198, карточка начинается с y134 */
+  /* Скругление верхних углов плашки на месте. От него же отступ вкладки от краёв: см. .tab. */
+  --aic-ip-card-r: 32px;
+  /*
+   * Отступ вкладки от боков плашки: радиус скругления плюс пиксель на сглаживание краёв. Правило
+   * одно с десктопом (desktop-ip-landing/src/components/process/styles.module.css): прямые бока
+   * вкладки стоят там, где вырезы верхних скруглений плашки уже кончились, поэтому жёлтому
+   * физически негде вылезти. Без запаса в пиксель бок вкладки касается границы выреза, и
+   * сглаживание всё равно даёт жёлтую нить вдоль угла.
+   */
+  --aic-ip-tab-inset: calc(var(--aic-ip-card-r) + 1px);
+  --aic-ip-deck-w: 306px;
+  --aic-ip-deck-h: 414px;
+  /*
+   * Индикатор шагов. Правило: активный пункт стоит на линии --aic-ip-progress-line от верха
+   * колоды, пройденные точки выше, будущие ниже. Плашка шага y350 при колоде y234, плашка
+   * x16 при колоде x48, точки 12px с зазором 6px (шаг 18px) по центру дорожки 20px (x20).
+   */
+  --aic-ip-progress-line: 116px;
+  --aic-ip-progress-inset: 32px;
+  --aic-ip-dot: 12px;
+  --aic-ip-dot-gap: 6px;
+  --aic-ip-dot-lane: 20px;
+  --aic-ip-active-margin: 6px;
+
+  position: relative;
+  box-sizing: border-box;
+  /* Подарки выше шагов, сцена растёт вниз. Без этого браузер «якорит» прокрутку и сдвигает
+     страницу на прирост высоты: верх композиции уезжал бы за окно. */
+  overflow-anchor: none;
+  /*
+   * Плавность переходов. Смена шагов: старый текст гаснет за 200 мс, новый проявляется за 400 мс и
+   * поднимается на 16px снизу за 600 мс, после паузы 150 мс. Смена шага на подарки перекрёстная:
+   * шаг гаснет за 300 мс (--aic-ip-gift-cross), подпись и подарки проявляются по одному с шагом
+   * 150 мс с первого кадра, на том же месте, без пустого кадра между ними. Высота меняется скачком
+   * через 150 мс, пока кнопка погашена (--aic-ip-cta-swap).
+   */
+  --aic-ip-card-move: 750ms cubic-bezier(0.22, 1, 0.36, 1);
+  --aic-ip-swap-out: 200ms;
+  --aic-ip-swap-in: 400ms;
+  --aic-ip-swap-rise: 600ms cubic-bezier(0.22, 1, 0.36, 1);
+  --aic-ip-swap-pause: 150ms;
+  --aic-ip-swap-shift: 16px;
+  --aic-ip-state: 700ms cubic-bezier(0.45, 0, 0.25, 1);
+  --aic-ip-gift-delay: 0ms;
+  --aic-ip-gift-cross: 300ms;
+  /* Кнопка гаснет на месте за столько же, сколько ждёт скачок высоты тела. */
+  --aic-ip-cta-swap: 150ms;
+  --aic-ip-gift-step: 150ms;
+  /* Отступ над колодой: колода на y218 при карточке y134, 24 + строка + отступ. Зазор над
+     кнопкой одинаковый в шагах и в подарках. */
+  --aic-ip-body-gap: calc(60px - 24px * var(--aic-ip-lh-heading));
+  /* Верх окна листания подарков: там, где в покое начинается содержимое подарков (верх тела). */
+  --aic-ip-scroll-top: var(--aic-ip-body-gap);
+  /* Наибольшая ширина угасания у верха окна листания (.scroller-gift). */
+  --aic-ip-scroll-fade-max: 16px;
+  --aic-ip-cta-gap: 20px;
+  --aic-ip-cta-gift-gap: 20px;
+  /*
+   * Подпись подарков выравнивается по левому краю ТЕКСТА карточек подарков. Правило одно на обе
+   * платформы: отступ списка от края содержимого плюс поле карточки. На мобайле список сдвинут
+   * вправо дорожкой индикатора, на десктопе колонка идёт от края — отсюда разные значения отступа
+   * при одном правиле.
+   */
+  --aic-ip-gift-list-inset: 32px;
+  --aic-ip-gift-card-pad: 16px;
+  /* Свой контекст наложения: z-index внутри раздела не спорят со слоями хоста. */
+  isolation: isolate;
+  background-color: var(--aic-ip-beige);
+}
+
+/*
+ * Подсказка «потянуть» без отрыва: при наведении на корешок и при фокусе с клавиатуры весь раздел
+ * вместе с корешком поднимается на те же 16px, что в подсказке, и плавно возвращается. Двигается
+ * раздел целиком, зазора нет. При reduced motion движения нет.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .process {
+    transition: transform 300ms cubic-bezier(0.33, 1, 0.68, 1);
+  }
+
+  .process:has(> .peek:focus-visible) {
+    transform: translateY(-16px);
+  }
+}
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .process:has(> .peek:hover) {
+    transform: translateY(-16px);
+  }
+}
+
+/*
+ * Корешок «Как происходит оформление?»: зона клика и фокуса над верхом карточки раздела, выступает
+ * на первый экран (по макету во всю ширину, высота 69px). Видимый корешок — сама карточка (переход
+ * ниже, «Переход первого экрана во второй»). При фокусе поднимается весь раздел вместе с карточкой;
+ * своего движения у корешка нет. Цвет закреплён: базовый a:hover банка красит ссылки в синий. В
+ * статичной раскладке (.list) это плашка.
+ */
+.peek {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  left: 0;
+  z-index: 1;
+  box-sizing: border-box;
+  height: var(--aic-ip-peek-h);
+  /* Заголовок раздела один, 24px с отступом 24px сверху. */
+  padding: 24px 16px 0;
+  font-family: var(--aic-ip-font-heading);
+  font-size: 24px;
+  font-weight: 500;
+  line-height: var(--aic-ip-lh-heading);
+  text-align: center;
+  text-decoration: none;
+  color: var(--aic-ip-ink);
+  background: var(--aic-ip-white);
+  border-radius: 24px 24px 0 0;
+  box-shadow: 0 0 30px rgba(255, 221, 45, 0.9);
+  /* Свечение только сверху и по бокам: снизу корешок продолжается белым телом раздела. */
+  clip-path: inset(-40px -40px 0 -40px);
+}
+
+/*
+ * Зона наведения продолжается вниз на высоту подъёма (16px): после подъёма раздела курсор,
+ * стоявший у нижнего края корешка, остаётся над ним, и раздел не дрожит вверх-вниз.
+ */
+.peek::after {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  height: 16px;
+  content: '';
+}
+
+.peek:hover,
+.peek:active {
+  color: var(--aic-ip-ink);
+}
+
+.peek:focus-visible {
+  clip-path: none;
+  outline: 2px solid var(--aic-ip-focus);
+  outline-offset: -4px;
+}
+
+/* Фокус приходит в раздел программно, после перехода по корешку: обводка на весь трек не нужна. */
+.process:focus {
+  outline: none;
+}
+
+/*
+ * Трек: сцена и распорка с отрезком прокрутки на каждый переход шагов (--aic-ip-segments) и
+ * пробегом подарков: max(отрезок, переполнение содержимого плашки), переполнение в px окна
+ * ставит скрипт (--aic-ip-gift-run, hooks/use-scroll-steps.ts, giftSpan). Отрезок — 70% высоты
+ * окна, он задан только здесь; скрипт читает его из DOM. vh — фолбэк для браузеров без svh.
+ * Содержимое подарков растягивается на весь этот пробег: экран подарков стоит столько же
+ * прокрутки, сколько любой шаг.
+ * Распорка, а не padding: залипающая сцена ограничена контентной областью родителя.
+ */
+.track {
+  position: relative;
+  box-sizing: border-box;
+}
+
+.track::after {
+  display: block;
+  height: calc(var(--aic-ip-segments) * 70vh + max(70vh, var(--aic-ip-gift-run, 0px)));
+  content: '';
+}
+
+/*
+ * Сцена — второй экран. Всё, что ниже шапки хоста, масштабируется по высоте окна (100svh) одним
+ * масштабом для всех состояний: (окно − шапка) / (740 − 64), не больше 1 и не меньше предела 12px /
+ * кегль текста карт (lib/fit.ts, minScaleFrom). При 402x740 масштаб 1, как в макете. Подарки
+ * листаются внутри плашки, плашка стоит. Если и при наименьшем масштабе шаги выше окна, сцена
+ * прилипает со сдвигом вверх на разницу. Сдвиг ограничен снизу зазором над композицией: верх сцены
+ * не уходит под шапку хоста ни в одном состоянии; если композиция и так выше окна, её низ
+ * дочитывается после трека. --aic-ip-stage-h — высота сцены в шагах. svh — окно с развёрнутыми
+ * панелями iOS. Сцена лежит под шапкой хоста: её фон продолжается за логотипом, как в макете.
+ */
+.stage {
+  position: sticky;
+  top: max(
+    calc(-1 * (var(--aic-ip-stage-gap) * var(--aic-ip-scale, 1) + var(--aic-ip-shift, 0px))),
+    min(0px, calc(100vh - var(--aic-ip-stage-h, 0px)))
+  );
+  box-sizing: border-box;
+  display: flex;
+  min-height: 100vh;
+  min-height: 100svh;
+  flex-direction: column;
+  /* Масштаб и сдвиг к центру считает скрипт (lib/fit.ts) по высоте 100svh. */
+  padding-top: calc(
+    var(--aic-ip-header) + var(--aic-ip-stage-gap) * var(--aic-ip-scale, 1) +
+      var(--aic-ip-shift, 0px)
+  );
+  /* Фон второго экрана сплошной бежевый, без жёлтого свечения. */
+  background: var(--aic-ip-beige);
+}
+
+/*
+ * svh — окно с развёрнутыми панелями iOS. Правила с svh и var() вместе браузер не может
+ * отбросить при разборе: без поддержки svh они стали бы недействительными при вычислении и
+ * обнулили бы свойство вместо фолбэка vh. Поэтому они только под @supports.
+ */
+@supports (height: 100svh) {
+  .track::after {
+    height: calc(var(--aic-ip-segments) * 70svh + max(70svh, var(--aic-ip-gift-run, 0px)));
+  }
+
+  .stage {
+    top: max(
+      calc(-1 * (var(--aic-ip-stage-gap) * var(--aic-ip-scale, 1) + var(--aic-ip-shift, 0px))),
+      min(0px, calc(100svh - var(--aic-ip-stage-h, 0px)))
+    );
+  }
+}
+
+/*
+ * Масштаб через transform: раскладка внутри кадра та же, что в макете, клики и фокус идут
+ * по реальным координатам. Без масштаба кадр тянется до низа окна (карточка уходит под
+ * панель Safari, как в макете). С масштабом кадр без него занимает --aic-ip-fill, чтобы после
+ * масштаба дойти до низа окна, а лишнюю высоту в потоке снимает отрицательное поле снизу.
+ */
+.frame {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  min-height: var(--aic-ip-fill, 0px);
+  flex: 1;
+  flex-direction: column;
+  margin-bottom: calc(var(--aic-ip-frame-h, 0px) * (var(--aic-ip-scale, 1) - 1));
+  transform: scale(var(--aic-ip-scale, 1));
+  transform-origin: 50% 0;
+}
+
+/*
+ * Вкладка лежит в потоке и уходит под карточку на --aic-ip-tab-overlap. Высота растёт от подписи:
+ * при одной строке это 128px, как в макете.
+ *
+ * Отступ от боков плашки — --aic-ip-tab-inset, то есть радиус её скругления плюс пиксель: при
+ * меньшем отступе прямые бока вкладки стояли бы внутри вырезов скругления, и в верхних углах
+ * выглядывал бы жёлтый. Правило то же, что на десктопе.
+ */
+.tab {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  margin: 0 var(--aic-ip-tab-inset) calc(-1 * var(--aic-ip-tab-overlap));
+  /* Подпись на y92 при вкладке y70 (dsHeading 24 в Chrome встаёт на 2px выше Figma). */
+  padding: 22px 16px calc(var(--aic-ip-tab-overlap) + 18px);
+  font-family: var(--aic-ip-font-heading);
+  font-size: 24px;
+  font-weight: 500;
+  line-height: var(--aic-ip-lh-heading);
+  color: var(--aic-ip-ink);
+  text-align: center;
+  background: var(--aic-ip-yellow);
+  border: 0;
+  border-radius: 32px;
+  cursor: pointer;
+}
+
+/*
+ * Белая плашка доходит до низа окна и тогда, когда iOS свернула панели и окно стало выше 100svh
+ * (иначе под плашкой оставалась бы полоса фона). Разница 100lvh − 100svh — запас вниз за низ сцены:
+ * в потоке его снимает отрицательное поле, высота сцены и сдвиг прилипания не меняются. В подарках
+ * запаса нет: их низ дочитывается прокруткой, и за конец раздела плашка выходить не должна; в
+ * статичной раскладке тоже. Под @supports, как svh выше.
+ */
+@supports (height: 100lvh) {
+  .process:not(.list) .stage {
+    --aic-ip-ui-gap: calc(100lvh - 100svh);
+  }
+}
+
+/*
+ * Карточка тянется до низа окна, как в макете. Поле под кнопкой 16px: по макету кнопка кончается на
+ * y724, на 16px выше низа окна, а дальше карточка уходит под панель Safari. Это поле входит в
+ * высоту сцены, по которой считается сдвиг прилипания.
+ */
+.card {
+  position: relative;
+  /* Свой контекст наложения: z-index внутри плашки (индикатор, кнопка) не спорят со слоями раздела. */
+  isolation: isolate;
+  box-sizing: border-box;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: calc(-1 * var(--aic-ip-ui-gap, 0px) / var(--aic-ip-scale, 1));
+  padding: 24px 16px calc(16px + var(--aic-ip-ui-gap, 0px) / var(--aic-ip-scale, 1));
+  overflow: clip;
+  background: var(--aic-ip-white);
+  border-radius: var(--aic-ip-card-r) var(--aic-ip-card-r) 0 0;
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.3);
+  /* Поле под кнопкой меняется вместе с высотой, а не скачком. */
+  transition:
+    padding-bottom var(--aic-ip-state),
+    margin-bottom var(--aic-ip-state);
+}
+
+/*
+ * Окно содержимого плашки: колода или подарки и кнопка. В шагах оно тянется до низа плашки. На
+ * экране подарков плашка стоит: окно закреплено на высоте из шагов (--aic-ip-view-h), обрезает
+ * содержимое, а содержимое сдвигается вверх по прокрутке страницы (--aic-ip-gift-scroll, px макета;
+ * hooks/use-scroll-steps.ts). Сдвиг растянут на весь пробег, который трек отвёл экрану подарков,
+ * идёт с паузой на чтение первой карточки (GIFT_READ_MS) и догоняет прокрутку за время, а не рывком
+ * (GIFT_EASE_MS, GIFT_MAX_STEP). Окно заходит в поля плашки (их возвращает padding), чтобы дорожка
+ * индикатора, вынесенная влево за край содержимого (.progress), не обрезалась краем окна.
+ */
+.scroller {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  width: calc(100% + 32px);
+  flex-direction: column;
+  margin: 0 -16px;
+  padding: var(--aic-ip-body-gap) 16px 0;
+  /* Где в окне листания начинается видимое: срез и угасание у верха (.scroller-gift). Окно само
+     не прокручивается, свойство только отдаёт число скрипту настоящей длиной (revealFocused). */
+  scroll-padding-top: calc(var(--aic-ip-scroll-top) + var(--aic-ip-scroll-fade-max));
+}
+
+.scroll-content {
+  box-sizing: border-box;
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  transform: translateY(calc(-1 * var(--aic-ip-gift-scroll, 0px)));
+}
+
+.process:not(.list) .scroller {
+  flex: 1 0 auto;
+}
+
+/* Окно до низа плашки, но не ниже, чем в шагах: отступ, колода и блок кнопки
+   (--aic-ip-cta-block ставит скрипт). */
+.process:not(.list) .scroller-gift {
+  min-height: calc(
+    var(--aic-ip-body-gap) + var(--aic-ip-deck-h, 0px) + var(--aic-ip-cta-block, 0px)
+  );
+  flex: 1 1 0;
+  overflow: clip;
+  /*
+   * Окно листания начинается не под заголовком, а там, где содержимое подарков стоит в покое
+   * (--aic-ip-scroll-top): поле между заголовком и содержимым остаётся пустым, пролистанное
+   * не заходит под заголовок. Выше края обрезано (clip-path режет и попадание курсора).
+   * У края содержимое гаснет в цвет плашки на 16px (--aic-ip-scroll-fade-max); угасание растёт вместе со сдвигом
+   * (--aic-ip-gift-scroll), поэтому в покое верх содержимого не выцветает.
+   */
+  --aic-ip-scroll-fade: min(var(--aic-ip-scroll-fade-max), var(--aic-ip-gift-scroll, 0px));
+
+  clip-path: inset(var(--aic-ip-scroll-top) 0 0 0);
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent var(--aic-ip-scroll-top),
+    #000 calc(var(--aic-ip-scroll-top) + var(--aic-ip-scroll-fade))
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent var(--aic-ip-scroll-top),
+    #000 calc(var(--aic-ip-scroll-top) + var(--aic-ip-scroll-fade))
+  );
+}
+
+/*
+ * Заголовок во всю ширину карточки: 24px, как в корешке, в одну строку на ширине макета.
+ */
+.title {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  font-family: var(--aic-ip-font-heading);
+  font-size: 24px;
+  font-weight: 500;
+  line-height: var(--aic-ip-lh-heading);
+  text-align: center;
+  color: var(--aic-ip-ink);
+}
+
+.deck-area {
+  position: relative;
+  box-sizing: border-box;
+  width: var(--aic-ip-deck-w);
+  margin: 0 auto;
+}
+
+/*
+ * Колонка индикатора стоит так, что первый пункт на линии; сдвиг вверх на номер активного
+ * пункта, умноженный на шаг точки, ставит на линию активный пункт. Правило одно для шагов
+ * и подарка. Сдвиг через transform: так его выключает reduced motion и не трогает раскладку.
+ * На экране подарков индикатор не листается с содержимым: translate возвращает его на сдвиг
+ * содержимого (--aic-ip-gift-scroll), без перехода: та же переменная, что у содержимого,
+ * поэтому индикатор стоит и при сглаженном ходе.
+ */
+.progress {
+  position: absolute;
+  top: calc(var(--aic-ip-progress-line) - var(--aic-ip-active-margin));
+  left: calc(-1 * var(--aic-ip-progress-inset));
+  z-index: 5;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--aic-ip-dot-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  transform: translateY(
+    calc(-1 * var(--aic-ip-active, 0) * (var(--aic-ip-dot) + var(--aic-ip-dot-gap)))
+  );
+  translate: 0 var(--aic-ip-gift-scroll, 0px);
+}
+
+.progress-item {
+  display: flex;
+  min-width: var(--aic-ip-dot-lane);
+  justify-content: center;
+}
+
+.pill {
+  box-sizing: border-box;
+  margin: var(--aic-ip-active-margin) 0;
+  padding: 8px;
+  font-family: var(--aic-ip-font-heading);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 16px;
+  color: var(--aic-ip-white);
+  white-space: nowrap;
+  background: linear-gradient(90deg, var(--aic-ip-pill-from) 0%, var(--aic-ip-pill-to) 100%);
+  border-radius: 100px;
+  box-shadow: 0 2px 8px rgba(40, 19, 16, 0.2);
+}
+
+.dot {
+  position: relative;
+  box-sizing: border-box;
+  width: var(--aic-ip-dot);
+  height: var(--aic-ip-dot);
+  padding: 0;
+  background: var(--aic-ip-cocoa);
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+/* Палец больше точки: зона нажатия 32px. */
+.dot::before {
+  position: absolute;
+  inset: -10px;
+  content: '';
+}
+
+/*
+ * Точка подарка: сплошная тёмная без обводки. #281310 к белому карточки 17.6:1, требование WCAG
+ * 1.4.11 — 3:1.
+ */
+.dot-gift {
+  background: var(--aic-ip-ink);
+}
+
+/* Пункт подарка: точка, а в состоянии подарка — маркер 32x32 на линии активного пункта. */
+.progress-gift {
+  position: relative;
+  align-items: center;
+}
+
+.gift-marker {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: block;
+  width: 32px;
+  height: 32px;
+  margin: -16px 0 0 -16px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.progress-gift-active {
+  width: 32px;
+  height: 32px;
+  /* Маркер по центру дорожки точек, по макету: x10 при центре дорожки x26. */
+  margin: var(--aic-ip-active-margin) 0 var(--aic-ip-active-margin)
+    calc((var(--aic-ip-dot-lane) - 32px) / 2);
+}
+
+.progress-gift-active.progress-gift-marker .gift-marker {
+  opacity: 1;
+}
+
+/* Под маркером кнопка растягивается на весь пункт: обводка фокуса окружает маркер. */
+.progress-gift-active.progress-gift-marker .dot-gift {
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  box-shadow: none;
+}
+
+.body {
+  position: relative;
+  box-sizing: border-box;
+  display: grid;
+  width: 100%;
+  /* Колода и подарки лежат в ОДНОЙ ячейке сетки, меняется только её высота (--aic-ip-deck-h ->
+     --aic-ip-gift-h, px из замера ставит скрипт). В двух отдельных строках подарки стояли бы
+     ниже на высоту сворачивающейся колоды, за окном, и экран пустел бы, пока они не въедут
+     снизу. Без скрипта — auto. */
+  grid-template-rows: var(--aic-ip-deck-h, auto);
+  /* Высота ячейки меняется скачком, а не плавно: плавный рост тянул бы вниз кнопку под телом,
+     она ползла бы кадр за кадром и уходила за низ экрана. К подаркам скачок ждёт
+     --aic-ip-cta-swap, пока кнопка гаснет (.body-gift). Назад — сразу: окно уже без класса
+     подарков, и устаревшая высота подарков на эти 150 мс вытянула бы плашку и сдвинула сцену
+     одним кадром; кнопка в этот момент за низом плашки. */
+  transition: none;
+}
+
+.body-gift {
+  grid-template-rows: var(--aic-ip-gift-h, auto);
+  transition: grid-template-rows var(--aic-ip-cta-swap) step-end;
+}
+
+.deck-row,
+.gift-row {
+  grid-area: 1 / 1;
+  min-height: 0;
+}
+
+/* Неактивная строка не даёт ячейке высоты, её содержимое выходит за неё и скрыто прозрачностью
+   или visibility. */
+.body:not(.body-gift) .gift-row,
+.body-gift .deck-row {
+  max-height: 0;
+}
+
+/*
+ * Строки сетки в пикселях, без fr: сетка без заданной высоты по-разному считает долю fr в
+ * Chrome и WebKit (в Safari строка колоды растягивалась до высоты подарков), а px-строки
+ * одинаковы во всех движках и плавно анимируются. Содержимое свёрнутой строки выходит за неё.
+ */
+/* Карты лежат в одной ячейке сетки: колода растёт по самой длинной карте. */
+.deck {
+  position: relative;
+  box-sizing: border-box;
+  display: grid;
+  width: 100%;
+  min-height: var(--aic-ip-deck-h);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/*
+ * Карта: заголовок с текстом центрированы по высоте между верхом карты (плюс 14px) и сноской,
+ * сноска прижата к низу. Так в макете стоят и однострочные, и двухстрочные заголовки (центр группы
+ * на y408 при колоде y234 и сноске y568).
+ */
+.step-card {
+  box-sizing: border-box;
+  display: flex;
+  grid-area: 1 / 1;
+  flex-direction: column;
+  align-items: center;
+  padding: 14px 16px 16px;
+  text-align: center;
+  background: var(--aic-ip-beige);
+  border-radius: 24px;
+}
+
+/*
+ * Смена шагов вертикальная. Карта одна и стоит на месте (фон и скругление у колоды), без колоды и
+ * поворотов. Меняется содержимое: старое гаснет, новое проявляется со сдвигом снизу после короткой
+ * паузы. Уходящее содержимое не двигается: сдвиг вниз ему ставится мгновенно, когда оно уже
+ * погасло.
+ */
+.process:not(.list) .deck {
+  background: var(--aic-ip-beige);
+  border-radius: 24px;
+  transition: opacity var(--aic-ip-swap-in) ease var(--aic-ip-swap-pause);
+}
+
+.process:not(.list) .step-card {
+  background: transparent;
+}
+
+.current {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity var(--aic-ip-swap-in) ease var(--aic-ip-swap-pause),
+    transform var(--aic-ip-swap-rise) var(--aic-ip-swap-pause);
+}
+
+.waiting {
+  opacity: 0;
+  transform: translateY(var(--aic-ip-swap-shift));
+  transition:
+    opacity var(--aic-ip-swap-out) ease,
+    transform 0s linear var(--aic-ip-swap-out);
+  pointer-events: none;
+}
+
+/* Шаг 3 уходит к подаркам через прозрачность вместе с картой, медленнее смены шагов: подарки
+   в той же ячейке проявляются поверх, пока карта ещё видна (перекрёстно, без пустого экрана). */
+.process:not(.list) .body-gift .deck {
+  opacity: 0;
+  transition: opacity var(--aic-ip-gift-cross) ease;
+}
+
+/* Сама карта шага при этом не гаснет отдельно (иначе две прозрачности перемножаются и шаг
+   пропадает вдвое быстрее), а прячется, когда колода уже погасла. */
+.process:not(.list) .body-gift .waiting {
+  transition:
+    opacity 0s linear var(--aic-ip-gift-cross),
+    transform 0s linear var(--aic-ip-gift-cross);
+}
+
+.step-body {
+  box-sizing: border-box;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 0; /* поровну сверху и снизу: центр не смещается, длинный текст не липнет */
+}
+
+.step-title {
+  box-sizing: border-box;
+  margin: 0;
+  font-family: var(--aic-ip-font-heading);
+  font-size: 24px;
+  font-weight: 500;
+  line-height: var(--aic-ip-lh-heading);
+  color: var(--aic-ip-ink);
+}
+
+.step-text {
+  box-sizing: border-box;
+  max-width: 236px;
+  margin: 24px 0 0;
+  font-family: var(--aic-ip-font-heading);
+  font-size: 20px;
+  font-weight: 500;
+  line-height: var(--aic-ip-lh-heading);
+  color: var(--aic-ip-ink);
+}
+
+.note {
+  box-sizing: border-box;
+  display: flex;
+  min-height: 64px;
+  align-self: stretch;
+  align-items: center;
+  gap: 16px;
+  margin: 0;
+  /* Поправка dsText 500 (--aic-ip-text-drop, --aic-ip-text-shift-500, styles.module.css): поля
+     перераспределены на ту же величину, размер сноски не меняется. */
+  padding: calc(11px + var(--aic-ip-text-drop)) calc(16px - var(--aic-ip-text-shift-500))
+    calc(11px - var(--aic-ip-text-drop)) calc(16px + var(--aic-ip-text-shift-500));
+  font-family: var(--aic-ip-font-text);
+  font-size: var(--aic-ip-text-body); /* основной текст карт, от него предел масштаба */
+  font-weight: 500;
+  line-height: 20px;
+  text-align: left;
+  color: var(--aic-ip-graphite);
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 16px;
+}
+
+.note-icon {
+  flex: none;
+  color: var(--aic-ip-ink);
+}
+
+.gift {
+  box-sizing: border-box;
+  width: 100%;
+  /* В состояниях шагов подарки скрыты и через visibility: ссылка «Остались вопросы?» не ловит
+     фокус невидимой. visibility гаснет, когда подарки погасли (--aic-ip-swap-out), а появляется
+     сразу: подарки лежат в одной ячейке поверх колоды и не должны ловить касания после ухода. */
+  visibility: hidden;
+  transition: visibility 0s linear var(--aic-ip-swap-out);
+}
+
+.body-gift .gift {
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+/*
+ * Подпись и подарки появляются поочерёдно, по одному, через прозрачность со сдвигом снизу. Порядок
+ * — --aic-ip-i (process.tsx). Обратно гаснут разом.
+ */
+.gift-head,
+.gift-item,
+.help {
+  opacity: 0;
+  transform: translateY(var(--aic-ip-swap-shift));
+  transition:
+    opacity var(--aic-ip-swap-out) ease,
+    transform 0s linear var(--aic-ip-swap-out);
+}
+
+.body-gift .gift-head,
+.body-gift .gift-item,
+.body-gift .help {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity var(--aic-ip-swap-in) ease,
+    transform var(--aic-ip-swap-rise);
+  transition-delay: calc(var(--aic-ip-gift-delay) + var(--aic-ip-i, 0) * var(--aic-ip-gift-step));
+}
+
+/*
+ * Подпись по левому краю текста карточек подарков: x64, правее дорожки индикатора, по общему
+ * правилу (--aic-ip-gift-list-inset, --aic-ip-gift-card-pad). Высота блока 70px и поле 12px снизу —
+ * по макету: подпись остаётся на y272, подарки начинаются на той же линии.
+ */
+.gift-head {
+  box-sizing: border-box;
+  display: flex;
+  height: 70px;
+  align-items: flex-end;
+  padding: 0 0 12px calc(var(--aic-ip-gift-list-inset) + var(--aic-ip-gift-card-pad));
+}
+
+.gift-subtitle {
+  position: relative;
+  top: var(--aic-ip-text-drop); /* поправка dsText 500 */
+  left: var(--aic-ip-text-shift-500);
+  box-sizing: border-box;
+  margin: 0;
+  font-family: var(--aic-ip-font-text);
+  font-size: var(--aic-ip-text-body); /* основной текст карт, от него предел масштаба */
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--aic-ip-graphite);
+}
+
+.gift-list {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0 0 0 var(--aic-ip-gift-list-inset);
+  padding: 0;
+  list-style: none;
+}
+
+.gift-item {
+  box-sizing: border-box;
+  display: flex;
+  min-height: 120px;
+  align-items: center;
+  gap: 8px;
+  /* Поле — 15px макета плюс 1px рамки, которой у карточки нет: текст стоит, как в макете. */
+  padding: var(--aic-ip-gift-card-pad);
+  background: var(--aic-ip-beige);
+  border-radius: 20px;
+}
+
+.gift-item-text {
+  box-sizing: border-box;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gift-item-title {
+  margin: 0;
+  font-family: var(--aic-ip-font-heading);
+  font-size: 20px;
+  font-weight: 500;
+  line-height: var(--aic-ip-lh-heading);
+  color: var(--aic-ip-ink);
+}
+
+.gift-item-description {
+  position: relative;
+  top: var(--aic-ip-text-drop); /* поправка базовой линии dsText */
+  margin: 0;
+  font-family: var(--aic-ip-font-text);
+  font-size: var(--aic-ip-text-body); /* основной текст карт, от него предел масштаба */
+  font-weight: 400;
+  line-height: 20px;
+  color: rgba(40, 19, 16, 0.8);
+}
+
+.gift-item-image {
+  flex: none;
+  width: 56px;
+  height: 56px;
+}
+
+/*
+ * «Остались вопросы?» Без ссылки это текст под списком. Со ссылкой из CMS блок становится
+ * карточкой-действием с рамкой, как в макете. Блок на y744, на 60px ниже последней карточки.
+ */
+.help {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 60px;
+  padding: 16px;
+  text-align: center;
+  text-decoration: none;
+  color: inherit;
+  border: 1px solid transparent;
+  border-radius: 20px;
+}
+
+.help-link {
+  border-color: var(--aic-ip-sand);
+  cursor: pointer;
+}
+
+.help-title {
+  margin: 0;
+  font-family: var(--aic-ip-font-heading);
+  font-size: 20px;
+  font-weight: 500;
+  line-height: var(--aic-ip-lh-heading);
+  color: var(--aic-ip-ink);
+}
+
+.help-text {
+  position: relative;
+  top: var(--aic-ip-text-drop); /* поправка базовой линии dsText */
+  margin: 0;
+  font-family: var(--aic-ip-font-text);
+  font-size: var(--aic-ip-text-body); /* основной текст карт, от него предел масштаба */
+  font-weight: 400;
+  line-height: 20px;
+  color: rgba(40, 19, 16, 0.8);
+}
+
+.cta {
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  min-height: 56px;
+  margin-top: var(--aic-ip-cta-gap);
+  /* Поправка базовой линии dsText, как у сноски. */
+  padding: calc(16px + var(--aic-ip-text-drop)) 20px calc(16px - var(--aic-ip-text-drop));
+  font-family: var(--aic-ip-font-text);
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--aic-ip-graphite);
+  background: var(--aic-ip-yellow);
+  border: 0;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+/*
+ * Смена шага на подарки и обратно: кнопка не едет вместе с высотой тела. Она гаснет на месте за
+ * --aic-ip-cta-swap (150 мс), в этот кадр тело меняет высоту скачком (.body), и кнопка проявляется
+ * уже на новом месте за --aic-ip-swap-in (400 мс). Назад к шагам тело меняет высоту сразу (.body),
+ * кнопка была за низом плашки и только проявляется на месте шагов, в такт с картой (пауза 150 мс и
+ * 400 мс). Доли ключевых кадров — от 550 мс: 150 / 550 = 27%. Две одинаковые анимации с разными
+ * именами: смена имени перезапускает её при каждой смене состояния. На экране подарков кнопка
+ * листается вместе с содержимым, поэтому не закреплена.
+ */
+@keyframes cta-to-steps {
+  0% {
+    opacity: 0;
+  }
+
+  27% {
+    opacity: 0;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes cta-to-gift {
+  0% {
+    opacity: 1;
+  }
+
+  27% {
+    opacity: 0;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+.process:not(.list) .body + .cta {
+  animation: cta-to-steps 550ms ease;
+}
+
+.process:not(.list) .body-gift + .cta {
+  animation-name: cta-to-gift;
+}
+
+.tab:active,
+.cta:active {
+  background: var(--aic-ip-yellow-pressed);
+}
+
+.help-link:active {
+  background: var(--aic-ip-beige);
+}
+
+.cta:focus-visible,
+.dot:focus-visible,
+.help-link:focus-visible {
+  outline: 2px solid var(--aic-ip-focus);
+  outline-offset: 2px;
+}
+
+/*
+ * Нижняя часть вкладки спрятана под карточкой, обычный outline там не виден. Обводка фокуса
+ * рисуется вокруг видимого язычка и заканчивается на кромке карточки.
+ */
+.tab:focus-visible {
+  outline: none;
+}
+
+.tab:focus-visible::after {
+  position: absolute;
+  inset: -4px -4px var(--aic-ip-tab-overlap);
+  content: '';
+  border: 2px solid var(--aic-ip-focus);
+  border-bottom: 0;
+  border-radius: 36px 36px 0 0;
+  pointer-events: none;
+}
+
+/*
+ * Переход первого экрана во второй: корешок — это верх самой карточки раздела, одним объектом с
+ * одним заголовком. --aic-ip-morph (0 в первом экране, 1 когда сцена прилипла) ставит скрипт по
+ * прокрутке, --aic-ip-morph-d — на сколько карточка в покое поднята над своим местом, чтобы её верх
+ * стоял на месте корешка (по макету во всю ширину, 69px). Первый экран закреплён
+ * (hero/styles.module.css), карточка наезжает на него снизу и встаёт на место, скругление растёт с
+ * 24 до 32px, свечение корешка сменяется тенью карточки, вкладка выезжает из-за карточки. Ширина
+ * карточки, поле сверху 24px и заголовок 24px не меняются и не масштабируются вместе со сценой
+ * (делятся на --aic-ip-scale): плашка во всю ширину окна, кегль один в корешке и на месте, без
+ * перескока на вторую строку. --aic-ip-rest и --aic-ip-done — доли «как корешок» и «как в макете».
+ * В статичной раскладке (.list) перехода нет: корешок остаётся отдельной плашкой.
+ */
+.process:not(.list) {
+  /* Сцена прозрачная: под ней закреплённый первый экран, его слой фона второго экрана
+     проявляется по --aic-ip-reveal. Прозрачные места пропускают палец к первому экрану. */
+  background-color: transparent;
+  pointer-events: none;
+}
+
+.process:not(.list) .stage {
+  /* Скругление плашки здесь в экранных px (делится на масштаб, см. .process:not(.list) .card),
+     поэтому отступ вкладки от боков делится на масштаб вместе с ним: её прямые бока стоят
+     за вырезами скруглений при ЛЮБОМ масштабе, а не только при 1. */
+  --aic-ip-tab-inset: calc((var(--aic-ip-card-r) + 1px) / var(--aic-ip-scale, 1));
+
+  background: none;
+}
+
+.process:not(.list) .peek,
+.process:not(.list) .tab,
+.process:not(.list) .card {
+  pointer-events: auto;
+}
+
+.process:not(.list) .frame {
+  --aic-ip-rest: calc(1 - var(--aic-ip-morph, 0));
+  --aic-ip-done: var(--aic-ip-morph, 0);
+
+  transform: translateY(
+      calc(
+        -1 *
+          var(
+            --aic-ip-morph-d,
+            calc(
+              var(--aic-ip-header) + (var(--aic-ip-stage-gap) + var(--aic-ip-tab-overlap)) *
+                var(--aic-ip-scale, 1) + var(--aic-ip-shift, 0px) + var(--aic-ip-peek-h)
+            )
+          ) *
+          (1 - var(--aic-ip-morph, 0))
+      )
+    )
+    scale(var(--aic-ip-scale, 1));
+}
+
+.process:not(.list) .card {
+  width: calc(100% / var(--aic-ip-scale, 1));
+  align-self: center;
+  padding-top: calc(24px / var(--aic-ip-scale, 1));
+  border-radius: calc(
+      (24px * var(--aic-ip-rest) + var(--aic-ip-card-r) * var(--aic-ip-done)) /
+        var(--aic-ip-scale, 1)
+    )
+    calc(
+      (24px * var(--aic-ip-rest) + var(--aic-ip-card-r) * var(--aic-ip-done)) /
+        var(--aic-ip-scale, 1)
+    )
+    0 0;
+  box-shadow:
+    0 0 30px rgba(255, 221, 45, calc(0.9 * (1 - var(--aic-ip-morph, 0)))),
+    0 0 30px rgba(0, 0, 0, calc(0.3 * var(--aic-ip-morph, 0)));
+}
+
+.process:not(.list) .title {
+  font-size: calc(24px / var(--aic-ip-scale, 1));
+}
+
+/*
+ * Под заголовком в покое пусто на всю видимую часть с запасом на подъём 16px: из-под корешка
+ * выглядывает только белая карточка с заголовком, как в макете. На месте отступ как в макете.
+ */
+.process:not(.list) .body {
+  margin-top: calc((48px - var(--aic-ip-body-gap)) * var(--aic-ip-rest));
+}
+
+/*
+ * Вкладка в первом экране целиком за карточкой и выезжает вместе с фоном второго экрана
+ * (--aic-ip-reveal, корень блока), а не с начала наезда: иначе жёлтая полоса ложилась бы
+ * на форму первого экрана.
+ *
+ * Ширина — от ширины плашки, а не от краёв кадра: плашка здесь шире кадра на масштаб
+ * (width: 100% / --aic-ip-scale), и отступ от краёв кадра не равнялся бы отступу от краёв
+ * плашки. Так вкладка ровно на два --aic-ip-tab-inset уже плашки, как на десктопе.
+ */
+.process:not(.list) .tab {
+  width: calc(100% / var(--aic-ip-scale, 1) - 2 * var(--aic-ip-tab-inset));
+  align-self: center;
+  margin-inline: 0;
+  transform: translateY(calc(var(--aic-ip-tab-overlap) * (1 - var(--aic-ip-reveal, 0))));
+}
+
+/* Корешок здесь — прозрачная зона клика и фокуса поверх верха карточки, текст для чтения вслух. */
+.process:not(.list) .peek {
+  color: transparent;
+  background: transparent;
+  box-shadow: none;
+  clip-path: none;
+}
+
+.process:not(.list) .peek:hover,
+.process:not(.list) .peek:active {
+  color: transparent;
+}
+
+/*
+ * Статичная раскладка: у хоста не работает sticky (overflow у предков). Шаги стоят списком,
+ * подарки сразу под ними, индикатор не нужен.
+ */
+.list .track::after {
+  display: none;
+}
+
+.list .stage {
+  position: relative;
+  top: auto;
+  min-height: 0;
+}
+
+.list .progress {
+  display: none;
+}
+
+.list .body .deck-row,
+.list .body .gift-row {
+  grid-area: auto;
+  max-height: none;
+}
+
+.list .body {
+  grid-template-rows: auto auto;
+  row-gap: 32px;
+}
+
+.list .deck {
+  row-gap: 16px;
+}
+
+.list .step-card {
+  grid-area: auto;
+  min-height: var(--aic-ip-deck-h);
+}
+
+.list .gift,
+.list .gift-head,
+.list .gift-item,
+.list .help {
+  visibility: visible;
+  opacity: 1;
+  transform: none;
+}
+
+/* В статичной раскладке дорожки индикатора нет: список и подпись идут от края содержимого. */
+.list {
+  --aic-ip-gift-list-inset: 0px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .progress {
+    transition: transform var(--aic-ip-card-move);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .body,
+  .card,
+  .current,
+  .waiting,
+  .process:not(.list) .deck,
+  .process:not(.list) .body-gift .deck,
+  .process:not(.list) .body-gift .waiting,
+  .gift,
+  .gift-head,
+  .gift-item,
+  .help,
+  .body-gift .gift-head,
+  .body-gift .gift-item,
+  .body-gift .help {
+    transition: none;
+  }
+
+  .process:not(.list) .body + .cta {
+    animation: none;
+  }
+
+  /* Без сдвига: содержимое сменяется мгновенно. */
+  .waiting,
+  .gift-head,
+  .gift-item,
+  .help {
+    transform: none;
+  }
+}

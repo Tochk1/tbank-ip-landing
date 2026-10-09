@@ -1,0 +1,81 @@
+{
+  "name": "growth-blocks-outsource",
+  "version": "1.0.0",
+  "description": "Outsource repository for microfrontend development",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "workspaces": [
+    "src/microfrontends/*",
+    "src/atoms/*"
+  ],
+  "scripts": {
+    "create-microfrontend": "tsx tools/create-microfrontend.ts",
+    "prepare-integration": "tsx tools/prepare-for-integration.ts",
+    "dev": "yarn storybook",
+    "storybook": "storybook dev -p 3040 --disable-telemetry",
+    "storybook:build": "storybook build --quiet --output-dir public/storybook --disable-telemetry",
+    "check:types": "tsc --noEmit",
+    "check:js": "eslint \"src/**/*.{js,jsx,ts,tsx}\" --max-warnings=0",
+    "check:css": "stylelint \"src/**/*.css\" --allow-empty-input",
+    "check:all": "yarn check:types && yarn check:js && yarn check:css",
+    "format:js": "eslint --fix \"src/**/*.{js,jsx,ts,tsx}\" --max-warnings=0",
+    "format:css": "stylelint --fix \"src/**/*.css\" --allow-empty-input",
+    "format:prettier": "prettier --write \"**/*.{ts,tsx,js,jsx,css,json,yml,md}\"",
+    "format:all": "yarn format:js && yarn format:css && yarn format:prettier",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": [
+      "yarn format:js"
+    ],
+    "*.{css,scss}": [
+      "yarn check:css",
+      "yarn format:css"
+    ],
+    "*.{json,yml,md,ts,tsx,js,jsx,css}": [
+      "yarn format:prettier"
+    ]
+  },
+  "dependencies": {
+    "classnames": "^2.3.2",
+    "prompts": "^2.4.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.28.4",
+    "@babel/plugin-proposal-class-properties": "^7.18.6",
+    "@babel/plugin-proposal-object-rest-spread": "^7.20.7",
+    "@babel/preset-env": "^7.28.3",
+    "@babel/preset-react": "^7.27.1",
+    "@babel/preset-typescript": "^7.27.1",
+    "@storybook/addon-essentials": "^7.4.6",
+    "@storybook/addon-styling-webpack": "0.0.6",
+    "@storybook/react": "^7.4.6",
+    "@storybook/react-webpack5": "^7.4.6",
+    "@types/prompts": "^2.4.9",
+    "@types/react": "^18.2.24",
+    "@types/react-dom": "^18.2.7",
+    "@typescript-eslint/eslint-plugin": "^8.46.2",
+    "@typescript-eslint/parser": "^8.46.2",
+    "autoprefixer": "^10.4.21",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^7.2.0",
+    "eslint-plugin-react": "7.28.0",
+    "eslint-plugin-react-hooks": "^4.0.5",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.5",
+    "postcss": "^8.5.6",
+    "postcss-loader": "^8.1.1",
+    "prettier": "^3.6.2",
+    "storybook": "^7.4.6",
+    "stylelint": "^15.10.3",
+    "stylelint-config-recommended": "^13.0.0",
+    "ts-loader": "^9.5.4",
+    "tsx": "^4.7.0",
+    "typescript": "^5.9.2"
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+}

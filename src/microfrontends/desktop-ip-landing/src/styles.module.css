@@ -1,0 +1,55 @@
+/*
+ * Все переменные блока с префиксом --aic- (требование банка: их регистрируют в PostCSS
+ * хоста, чтобы не конфликтовать со своими). Токены банка --tui-* берём с фолбэком:
+ * в Storybook их нет, на проде есть.
+ */
+.root {
+  --aic-ip-ink: #281310;
+  --aic-ip-graphite: var(--tui-text-primary-on-accent-1, #333333);
+  --aic-ip-cocoa: #6d5f5b;
+  --aic-ip-beige: #f1eee8;
+  --aic-ip-sand: #ece1cf;
+  --aic-ip-white: var(--tui-background-base, #ffffff);
+  --aic-ip-yellow: var(--tui-background-accent-1, #ffdd2d);
+  --aic-ip-yellow-hover: var(--tui-background-accent-1-hover, #ffcd33);
+  --aic-ip-yellow-pressed: var(--tui-background-accent-1-pressed, #fab619);
+  --aic-ip-focus: var(--tui-text-action, #126df7);
+  /* Плашка «Шаг N»: градиент из макета. */
+  --aic-ip-pill-from: #35221e;
+  --aic-ip-pill-to: var(--aic-ip-cocoa);
+  /*
+   * Поправка базовой линии dsText. Chrome ставит строки dsText выше, чем макет в Figma: 15px на
+   * 1px, 20px на 2px, у начертаний 400 и 500 одинаково. Это смещение гарнитуры, а не элементов,
+   * поэтому поправка одна на кегль и применяется ко всем текстам dsText блока (группы «Поправка
+   * базовой линии dsText» в CSS компонентов). dsHeading не смещён. Поправки на 20px в блоке нет:
+   * весь dsText здесь 15px, а 20px набран dsHeading.
+   */
+  --aic-ip-text-drop: 1px;
+  /* У начертания 500 кеглем 15px строки dsText ещё и на 1px правее макета. */
+  --aic-ip-text-shift-500: -1px;
+  /* Корешок следующего блока по макету: 732x80, первый экран оставляет под него место. */
+  --aic-ip-peek-h: 80px;
+  --aic-ip-peek-w: 732px;
+  /*
+   * Нижний предел масштаба экранов — правило: основной текст карт не мельче 12px,
+   * предел = --aic-ip-text-min / --aic-ip-text-body (lib/fit.ts, minScaleFrom).
+   */
+  --aic-ip-text-min: 12px;
+  --aic-ip-text-body: 15px;
+  --aic-ip-font-heading:
+    'dsHeading', 'dsHeading Fallback', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue',
+    Arial, sans-serif;
+  --aic-ip-font-text:
+    'dsText', 'dsText Fallback', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
+
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 1104px;
+  overflow-x: clip;
+  /* Прокрутка к форме ставит начало блока под шапку хоста (lib/motion.ts, scrollToForm). */
+  scroll-margin-top: var(--aic-ip-header);
+  color: var(--aic-ip-ink);
+  background: var(--aic-ip-beige);
+}

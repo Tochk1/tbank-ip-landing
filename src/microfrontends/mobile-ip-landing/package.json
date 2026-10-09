@@ -1,0 +1,22 @@
+{
+  "name": "mobile-ip-landing",
+  "version": "0.0.0-stub",
+  "description": "Короткий лендинг: открыть ИП",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "classnames": "^2.3.1",
+    "isomorphic-dompurify": "^2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "peerDependencies": {
+    "isomorphic-dompurify": "^2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "author": "aic",
+  "released": false
+}

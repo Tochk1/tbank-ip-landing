@@ -1,0 +1,25 @@
+# Проверяем изменения в запрещённых директориях
+FORBIDDEN="^(src/microfrontends/_template|src/styles)/"
+
+# Используем `|| true`, чтобы избежать ошибки, если grep не находит совпадений
+violating_files=$(git diff --cached --name-only | grep -E "$FORBIDDEN" || true)
+
+if [ -n "$violating_files" ]; then
+  echo -e \
+  "❌ Запрещено редактировать файлы в защищённых директориях\n\n\
+  Обнаружены изменённые файлы:\n\
+  $(echo "$violating_files" | sed 's/^/  • /')" \
+  >&2
+  exit 1
+fi
+
+# Проверяем типы
+npx tsc --noEmit --pretty
+if [ $? -ne 0 ]; then
+  echo "❌ Проверка типов не прошла. Коммит остановлен."
+  exit 1
+fi
+
+# Затем запускаем lint-staged (применяет Prettier к изменённым файлам)
+echo "✨ Форматирование кода..."
+npx lint-staged

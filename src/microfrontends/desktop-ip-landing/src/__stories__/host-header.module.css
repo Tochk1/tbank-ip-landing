@@ -1,0 +1,32 @@
+/*
+ * Заглушка шапки хоста: липкая. Блок её не рисует, а только оставляет под неё место отступом
+ * --aic-ip-header. В верху страницы прозрачная, при прокрутке бежевая подложка цвета фона блока
+ * (#f1eee8). Размеры и место логотипа взяты из макета, см. host-header.tsx.
+ */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  box-sizing: border-box;
+  background-color: rgba(241, 238, 232, 0);
+}
+
+.header[data-scrolled] {
+  background-color: rgba(241, 238, 232, 1);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .header {
+    transition: background-color 150ms ease;
+  }
+}
+
+.logo {
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  display: block;
+  width: 41px;
+  height: 48px;
+  transform: translateX(-50%);
+}
