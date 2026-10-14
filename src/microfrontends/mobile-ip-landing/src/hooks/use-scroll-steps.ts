@@ -24,14 +24,23 @@ const GIFT_READ_MS = 1200;
 const KEYBOARD_MIN = 160;
 
 /**
- * Открыта ли экранная клавиатура: visual viewport ниже окна на KEYBOARD_MIN. Способность
- * окна, а не платформа: здесь мобильный блок, и клавиатура настоящая — проверка отделяет
- * «клавиатура заняла место» от «фокус просто стоит в поле». Без visualViewport (старые
- * движки) подъёма нет: механизма узнать про клавиатуру у нас тогда тоже нет.
+ * Насколько должна сдвинуться граница диапазона scroll-driven анимации, px прокрутки, чтобы скрипт
+ * её переписал (см. setRange). Меньше пикселя ход на глаз не меняет, а дрожь замера между кадрами —
+ * сотые и десятые доли пикселя.
+ */
+const RANGE_STEP = 0.5;
+
+/**
+ * Открыта ли экранная клавиатура: видимая часть окна ниже layout viewport на KEYBOARD_MIN. Высота
+ * visualViewport делится на масштаб страницы, иначе увеличение (жест или автоувеличение iOS)
+ * принималось бы за клавиатуру; база — clientHeight корня, innerHeight на iOS при увеличении тоже
+ * меняется. Без visualViewport подъёма нет.
  */
 const keyboardUp = (): boolean => {
   const view = typeof window === 'undefined' ? null : window.visualViewport;
-  return Boolean(view) && window.innerHeight - (view as VisualViewport).height > KEYBOARD_MIN;
+  if (!view) return false;
+  const layout = document.documentElement.clientHeight || window.innerHeight;
+  return layout - view.height * (view.scale || 1) > KEYBOARD_MIN;
 };
 
 /**
@@ -87,6 +96,39 @@ const giftSpan = (total: number, states: number, run: number) => {
   const pause = SWITCH_AT * segment;
   const travel = Math.max(rest * segment, run);
   return { segment, pause, travel, span: pause + travel };
+};
+
+/**
+ * Длина разгона содержимого подарков, доля отрезка. Без разгона содержимое после паузы сразу шло со
+ * скоростью прокрутки, и на телефоне это видно как толчок. Разгон стоит серединой на начале хода
+ * (половина у паузы, половина у хода), поэтому конец хода и длина трека не меняются.
+ */
+const GIFT_EASE = 0.2;
+
+/**
+ * Половина отрезка разгона, px прокрутки: не больше половины паузы и не больше хода (иначе разгон
+ * залез бы в смену состояния или за конец хода).
+ */
+const giftEaseHalf = (segment: number, pause: number, reach: number) =>
+  Math.max(0, Math.min(GIFT_EASE * segment, 2 * pause, 2 * reach) / 2);
+
+/**
+ * Доля хода подарков (0..1) по прокрутке d от конца паузы, px. Без разгона это d / reach. С
+ * разгоном полуширины h на [−h, h] сдвиг (d + h)² / 4h, дальше снова d: сдвиг и его производная по
+ * прокрутке непрерывны.
+ */
+const giftShare = (d: number, reach: number, h: number) => {
+  if (reach <= 0) return 0;
+  let moved = d;
+  if (h > 0 && d < h) moved = d <= -h ? 0 : (d + h) ** 2 / (4 * h);
+  return Math.min(1, Math.max(0, moved / reach));
+};
+
+/** Обратная к giftShare: на сколько px от конца паузы прокрутить, чтобы пройти долю share. */
+const giftShareInverse = (share: number, reach: number, h: number) => {
+  const moved = share * reach;
+  if (h <= 0 || moved >= h) return moved;
+  return 2 * Math.sqrt(moved * h) - h;
 };
 
 /**
@@ -205,6 +247,8 @@ export const useScrollSteps = (statesCount: number, withCta: boolean) => {
     // Высота окна и подъём карточки для перехода первого экрана во второй (см. setMorph).
     let viewportH = 0;
     let morphD = 0;
+    // Наименьший ход reveal, px окна: выступ вкладки (см. revealSpan).
+    let revealMin = 0;
     // Переполнение содержимого подарков и текущий сдвиг содержимого, оба в px макета (giftSpan).
     let overflow = 0;
     let giftShift = 0;
@@ -283,6 +327,14 @@ export const useScrollSteps = (statesCount: number, withCta: boolean) => {
           const cardTop = (parseFloat(style.paddingTop) || 0) + card.offsetTop * scale;
           morphD = Math.round(cardTop + px(style, '--aic-ip-peek-h'));
           set('--aic-ip-morph-d', `${morphD}px`);
+          // Выступ вкладки над плашкой на месте, px окна: высота минус заход под плашку.
+          const tab = frameNode.querySelector(':scope > button');
+          revealMin =
+            tab instanceof HTMLElement
+              ? Math.max(0, (tab.offsetHeight - px(style, '--aic-ip-tab-overlap')) * scale)
+              : 0;
+          // Верх плашки в кадре, px макета: подложки свечения и тени (process/styles.module.css).
+          set('--aic-ip-card-top', `${card.offsetTop}px`);
         }
       }
       // Высота сцены — после масштаба: от него зависит высота. Только в шагах (см. выше).
@@ -349,20 +401,21 @@ export const useScrollSteps = (statesCount: number, withCta: boolean) => {
       travel: number;
     };
     /**
-     * Сдвиг содержимого на экране подарков: доля пройденного хода (после паузы, см. giftSpan),
-     * умноженная на переполнение. При поддержке scroll-driven animations ход ведёт CSS, а скрипт
-     * ставит только границы (--aic-ip-gift-from/-to) и переполнение (--aic-ip-gift-max). Иначе
-     * скрипт пишет --aic-ip-gift-scroll со сближением по времени (easeGift); при reduced motion —
-     * без паузы и сближения.
+     * Сдвиг содержимого на экране подарков: доля пройденного хода (giftSpan, разгон — giftShare),
+     * умноженная на переполнение. При поддержке scroll-driven animations ход ведёт CSS, скрипт
+     * ставит только границы (--aic-ip-gift-from/-ease/-to) и сдвиги (--aic-ip-gift-max,
+     * --aic-ip-gift-ease-max). Иначе скрипт пишет --aic-ip-gift-scroll со сближением по времени
+     * (easeGift).
      */
     const setGiftScroll = (geometry: GiftGeometry, inGift: boolean) => {
       const start = (statesCount - 1) * geometry.segment;
       // Последний пиксель хода — уже конец: прокрутка целая, а трек дробный, и без этого содержимое
       // не доезжало бы в конце на доли пикселя.
       const reach = Math.max(1, geometry.travel - 1);
+      const h = giftEaseHalf(geometry.segment, geometry.pause, reach);
       const share =
         inGift && geometry.travel > 0
-          ? Math.min(1, Math.max(0, (geometry.shifted - start - geometry.pause) / reach))
+          ? giftShare(geometry.shifted - start - geometry.pause, reach, h)
           : 0;
       giftTarget = Math.round(share * overflow * 10) / 10;
       if (driven && root) {
@@ -374,10 +427,14 @@ export const useScrollSteps = (statesCount: number, withCta: boolean) => {
         const stickTop = (parseFloat(getComputedStyle(geometry.stage).top) || 0) * zoom;
         const base =
           geometry.trackRect.top - (section ? ownShiftY(section) : 0) + window.scrollY - stickTop;
-        const from = base + start + geometry.pause;
-        setRoot('--aic-ip-gift-from', scrollPx(from));
-        setRoot('--aic-ip-gift-to', scrollPx(from + reach));
+        // Разгон на [from, ease] (giftShare), дальше линейно до to. Сдвиг в конце разгона — h
+        // прокрутки при рабочем числе overflow / reach, px макета.
+        const corner = base + start + geometry.pause;
+        setRange('--aic-ip-gift-from', corner - h);
+        setRange('--aic-ip-gift-ease', corner + h);
+        setRange('--aic-ip-gift-to', corner + reach);
         set('--aic-ip-gift-max', `${overflow}px`);
+        set('--aic-ip-gift-ease-max', `${Math.round(((overflow * h) / reach) * 100) / 100}px`);
         if (giftFrame) window.cancelAnimationFrame(giftFrame);
         giftFrame = 0;
         giftShift = giftTarget;
@@ -426,11 +483,13 @@ export const useScrollSteps = (statesCount: number, withCta: boolean) => {
       if (Math.abs((shift - giftTarget) * k) < 1) return;
       const geometry = measure();
       if (!geometry || geometry.travel <= 0) return;
-      // Нужный сдвиг — доля переполнения — столько же доли хода после паузы (giftSpan).
+      // Нужный сдвиг — доля переполнения; прокрутка до неё — обратная к giftShare.
       const start = (statesCount - 1) * geometry.segment + geometry.pause;
-      const want = start + (shift / overflow) * Math.max(1, geometry.travel - 1);
+      const reach = Math.max(1, geometry.travel - 1);
+      const h = giftEaseHalf(geometry.segment, geometry.pause, reach);
+      const want = start + giftShareInverse(shift / overflow, reach, h);
       const options: ScrollToOptions = {
-        top: shift > 0 ? want - geometry.shifted : Math.min(0, start - geometry.shifted),
+        top: shift > 0 ? want - geometry.shifted : Math.min(0, start - h - geometry.shifted),
         behavior: 'auto',
       };
       // Фокус с клавиатуры снимает паузу на чтение: пользователь сам выбрал, куда смотреть.
@@ -446,42 +505,27 @@ export const useScrollSteps = (statesCount: number, withCta: boolean) => {
     const section = track?.closest('section');
     const root = track?.closest<HTMLElement>('[data-aic-ip-root]');
     /**
-     * Фокус в форме первого экрана. Первый экран закреплён, а iOS при фокусе прокручивает документ,
-     * чтобы поле встало над клавиатурой, и пользователь может листать с открытой клавиатурой:
-     * плашка наезжала бы на поле, а data-aic-ip-covered спрятал бы форму и закрыл клавиатуру. Пока
-     * фокус в форме, covered не ставится, а первый экран идёт вместе с документом: на сколько
-     * документ ушёл вниз с момента фокуса, на столько поднят верх закрепления (--aic-ip-hero-lift
-     * на корне, hero/styles.module.css). Но не дальше, чем ушла плашка (она едет медленнее
-     * документа): низ экрана не отрывается от её верха, между ними не проступает фон. Поле при этом
-     * остаётся над плашкой. После ухода фокуса подъём не растёт и убывает при прокрутке вверх:
-     * экран не прыгает и снова закреплён, когда документ вернулся к месту фокуса. hold — верх корня
-     * и подъём в момент фокуса. Предел по плашке — из текущего замера: экран поднимется ещё на
-     * столько, на сколько его низ сейчас ниже верха плашки (экран выше окна закрепляется не сразу,
-     * поэтому запас из момента фокуса не годится).
-     *
-     * Подъём включает НЕ фокус сам по себе, а занятое экранной клавиатурой место (keyboardUp): он и
-     * нужен только под неё. Кнопка «Начать свой бизнес» прокручивает к форме и ставит фокус в
-     * первое поле (lib/motion.ts, scrollToForm), а клавиатура при этом открывается не всегда:
-     * программный focus() без касания поля её не поднимает. Если бы подъём включал сам фокус, он
-     * рос бы с документом, пока низ первого экрана не упрётся в верх плашки. Дальше край формы
-     * оказался бы ВЫШЕ верха плашки, setReveal читал бы это как «плашка ещё не дошла»,
-     * --aic-ip-reveal оставался бы 0 — вкладка «Начать свой бизнес» больше не выезжала бы, а фон
-     * второго экрана не проявлялся. Условие — способность окна, а не платформа: клавиатура занимает
-     * место — подъём есть, не занимает — подъёма нет.
+     * Фокус в форме первого экрана при открытой клавиатуре: iOS прокручивает документ к полю, и
+     * плашка наехала бы на него. Тогда экран идёт с документом (--aic-ip-hero-lift), но не дальше
+     * плашки. Подъём включает занятое клавиатурой место, а не фокус: программный focus() клавиатуру
+     * не открывает, и подъём навсегда сбил бы reveal. Клавиатура закрылась или фокус ушёл — подъём
+     * сразу 0.
      */
-    let hold: { rootTop: number; lift: number } | null = null;
+    let hold: number | null = null;
     let lift = 0;
-    const setLift = (edge: Element | null, focused: boolean, cardTop: number) => {
+    const setLift = (edge: Element | null, keyboard: boolean, cardTop: number) => {
       if (!root) return;
-      const rootTop = root.getBoundingClientRect().top;
-      if (focused && !hold) hold = { rootTop, lift };
-      if (!hold) return;
-      const hero = edge?.closest('section');
-      const withDocument = hold.lift + hold.rootTop - rootTop;
-      const withCard = hero ? lift + hero.getBoundingClientRect().bottom - cardTop : withDocument;
-      const target = Math.max(0, Math.min(withDocument, withCard));
-      lift = focused ? target : Math.min(lift, target);
-      if (!focused && lift <= 0) hold = null;
+      if (keyboard) {
+        const rootTop = root.getBoundingClientRect().top;
+        if (hold === null) hold = rootTop;
+        const hero = edge?.closest('section');
+        const withDocument = hold - rootTop;
+        const withCard = hero ? lift + hero.getBoundingClientRect().bottom - cardTop : withDocument;
+        lift = Math.max(0, Math.min(withDocument, withCard));
+      } else {
+        hold = null;
+        lift = 0;
+      }
       const value = `${Math.round(lift * 10) / 10}px`;
       if (root.style.getPropertyValue('--aic-ip-hero-lift') !== value) {
         root.style.setProperty('--aic-ip-hero-lift', value);
@@ -502,12 +546,32 @@ export const useScrollSteps = (statesCount: number, withCta: boolean) => {
     /** Позиция прокрутки в px с точностью до сотой: границы диапазонов анимации. */
     const scrollPx = (value: number) => `${Math.round(value * 100) / 100}px`;
     /**
+     * Граница диапазона анимации на корне, px прокрутки. Переписывается только при сдвиге на
+     * RANGE_STEP и больше: иначе доли пикселя от округлений меняли бы её каждый кадр, а каждая
+     * запись в стиль корня пересчитывает стиль всего блока прямо во время хода, который ведёт
+     * браузер.
+     */
+    const setRange = (name: string, value: number) => {
+      if (!root) return;
+      const current = parseFloat(root.style.getPropertyValue(name));
+      if (Number.isFinite(current) && Math.abs(current - value) < RANGE_STEP) return;
+      root.style.setProperty(name, scrollPx(value));
+    };
+    /**
      * Производные reveal (фон второго экрана, гашение заголовка, вкладка) тоже ведёт браузер, пока
      * reveal — линейная функция прокрутки, то есть пока первый экран закреплён. Начало отрезка —
      * где верх плашки дошёл до края формы: t0 = (край − место плашки) × окно / (окно − morphD),
      * край — в закреплённом положении. Под экранной клавиатурой ведёт скрипт. Возвращает, ведёт ли
      * браузер.
      */
+    /**
+     * Ход reveal по верху плашки, px окна: от края формы до места плашки, но не короче выступа
+     * вкладки (revealMin). Если форма выше места плашки (высокая форма, короткое окно, крупный
+     * шрифт), без этого предела reveal оставался бы 0: вкладка не выезжала бы, фон не проявлялся,
+     * заголовок не гас.
+     */
+    const revealSpan = (edgeTop: number, finalTop: number) =>
+      Math.max(edgeTop - finalTop, revealMin);
     const setRevealRange = (edge: Element | null, finalTop: number, morphAt: number) => {
       const hero = edge?.closest('section');
       if (!edge || !hero || viewportH <= morphD) return false;
@@ -516,12 +580,9 @@ export const useScrollSteps = (statesCount: number, withCta: boolean) => {
       const stick = (parseFloat(getComputedStyle(hero).top) || 0) + origin;
       const edgePinned =
         edge.getBoundingClientRect().top - hero.getBoundingClientRect().top + stick;
-      const span = edgePinned - finalTop;
+      const span = revealSpan(edgePinned, finalTop);
       if (span <= 1) return false;
-      setRoot(
-        '--aic-ip-reveal-from',
-        scrollPx(morphAt - (span * viewportH) / (viewportH - morphD))
-      );
+      setRange('--aic-ip-reveal-from', morphAt - (span * viewportH) / (viewportH - morphD));
       return true;
     };
     /**
@@ -539,21 +600,30 @@ export const useScrollSteps = (statesCount: number, withCta: boolean) => {
       // по самому фокусу: поле с фокусом не прячем, даже когда клавиатура закрыта.
       setLift(edge, focused && keyboardUp(), cardTop);
       let reveal = morph;
+      let underCard = reveal > 0;
       const finalTop = cardTop - sectionTop + morphD * (1 - morph);
       if (edge) {
         const edgeTop = edge.getBoundingClientRect().top;
-        const span = edgeTop - finalTop;
-        reveal = span > 1 ? (edgeTop - cardTop) / span : Number(cardTop <= edgeTop);
+        underCard = cardTop <= edgeTop;
+        // Под клавиатурой первый экран идёт с документом, край формы не стоит: ход по нему самому,
+        // без нижнего предела (вкладка не выезжает, пока форма над плашкой).
+        const span = hold !== null ? edgeTop - finalTop : revealSpan(edgeTop, finalTop);
+        reveal = span > 1 ? (finalTop + span - cardTop) / span : Number(underCard);
       }
       const value = String(Math.round(Math.min(1, Math.max(0, reveal)) * 1000) / 1000);
       setRoot('--aic-ip-reveal', value);
-      root.toggleAttribute('data-aic-ip-covered', value !== '0' && !focused);
+      // Форма спрятана, когда её край под плашкой. Если форма выше места плашки, — когда фон
+      // второго экрана проявился целиком: до этого её верх ещё виден над плашкой.
+      root.toggleAttribute(
+        'data-aic-ip-covered',
+        value !== '0' && (underCard || value === '1') && !focused
+      );
       if (morphAt === null) return;
       // Место плашки (finalTop) верно, только пока сцена не прилипла (morph < 1): дальше раздел
       // уходит вверх, а карточка стоит. Тогда граница остаётся прежней; reveal там и так 1.
       const current = root.getAttribute('data-aic-ip-scroll-driven');
       let mode = current ?? '';
-      if (hold || lift > 0) mode = '';
+      if (hold !== null) mode = '';
       else if (morph < 1) mode = setRevealRange(edge, finalTop, morphAt) ? 'reveal' : '';
       if (current !== mode) {
         root.setAttribute('data-aic-ip-scroll-driven', mode);
@@ -576,9 +646,12 @@ export const useScrollSteps = (statesCount: number, withCta: boolean) => {
       // тогда и наезд остаётся за скриптом.
       if (driven && root && card) {
         morphAt = trackTop - ownShiftY(section) + window.scrollY;
-        setRoot('--aic-ip-morph-from', scrollPx(morphAt - viewportH));
-        setRoot('--aic-ip-morph-to', scrollPx(morphAt));
+        setRange('--aic-ip-morph-from', morphAt - viewportH);
+        setRange('--aic-ip-morph-to', morphAt);
         section.style.removeProperty('--aic-ip-morph');
+        // Пока наезд идёт, CSS двигает вкладку и окно содержимого; после — снимает их анимации,
+        // чтобы в шагах у них не было своего слоя (process/styles.module.css).
+        root.toggleAttribute('data-aic-ip-morphing', morph < 1);
       } else {
         const value = String(morph);
         if (section.style.getPropertyValue('--aic-ip-morph') !== value) {
@@ -628,6 +701,7 @@ export const useScrollSteps = (statesCount: number, withCta: boolean) => {
       observer?.disconnect();
       // Без скрипта наезд снова ведёт переменная: CSS-анимация выключается вместе с режимом.
       root?.removeAttribute('data-aic-ip-scroll-driven');
+      root?.removeAttribute('data-aic-ip-morphing');
       if (frame) window.cancelAnimationFrame(frame);
       if (giftFrame) window.cancelAnimationFrame(giftFrame);
     };

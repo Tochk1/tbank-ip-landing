@@ -43,7 +43,8 @@ export const useFirstScreenFit = (
           px(style, '--aic-ip-hero-gap-bottom'),
         ],
         minGap: px(style, '--aic-ip-hero-gap-min'),
-        minScale: minScaleFrom(style),
+        // Свой предел: заголовок корешка виден при загрузке и при высокой форме банка.
+        minScale: minScaleFrom(style, '--aic-ip-text-min-hero'),
       });
       set('--aic-ip-hero-gaps', String(Math.round(gapShare * 10000) / 10000));
       set('--aic-ip-hero-scale', String(Math.round(scale * 10000) / 10000));

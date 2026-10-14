@@ -62,6 +62,19 @@
     box-shadow 150ms ease;
 }
 
+/*
+ * iOS увеличивает страницу при фокусе поля с кеглем меньше 16px и не возвращает масштаб после
+ * клавиатуры, страница ездит вбок. Запрет масштабирования в meta viewport отнял бы жест увеличения,
+ * поэтому поля 16px только на iOS (по -webkit-touch-callout, он есть лишь в WebKit на iOS и
+ * iPadOS).
+ */
+@supports (-webkit-touch-callout: none) {
+  .input,
+  .input-error {
+    font-size: 16px;
+  }
+}
+
 .input-error {
   background: rgba(247, 82, 82, 0.12);
 }

@@ -67,12 +67,12 @@
   --aic-ip-cta-gap: 20px;
   --aic-ip-cta-gift-gap: 20px;
   /*
-   * Подпись подарков выравнивается по левому краю ТЕКСТА карточек подарков. Правило одно на обе
-   * платформы: отступ списка от края содержимого плюс поле карточки. На мобайле список сдвинут
-   * вправо дорожкой индикатора, на десктопе колонка идёт от края — отсюда разные значения отступа
-   * при одном правиле.
+   * Подпись подарков выравнивается по левому краю текста карточек: отступ списка плюс поле
+   * карточки. На мобайле список начинается не левее колоды: дорожка индикатора привязана к колоде,
+   * и на коротком окне иначе карточки ложились бы на точки индикатора. Проценты — от ширины блока
+   * подарков (.gift-head, .gift-list).
    */
-  --aic-ip-gift-list-inset: 32px;
+  --aic-ip-gift-list-inset: max(32px, (100% - var(--aic-ip-deck-w)) / 2);
   --aic-ip-gift-card-pad: 16px;
   /* Свой контекст наложения: z-index внутри раздела не спорят со слоями хоста. */
   isolation: isolate;
@@ -280,15 +280,16 @@
 }
 
 /*
- * Белая плашка доходит до низа окна и тогда, когда iOS свернула панели и окно стало выше 100svh
- * (иначе под плашкой оставалась бы полоса фона). Разница 100lvh − 100svh — запас вниз за низ сцены:
- * в потоке его снимает отрицательное поле, высота сцены и сдвиг прилипания не меняются. В подарках
- * запаса нет: их низ дочитывается прокруткой, и за конец раздела плашка выходить не должна; в
- * статичной раскладке тоже. Под @supports, как svh выше.
+ * Белая плашка доходит до низа окна и тогда, когда iOS свернула панели и окно выше 100svh. Запас
+ * 100lvh − 100svh вниз за низ сцены снимается отрицательным полем, и такое же прозрачное поле стоит
+ * под треком, чтобы в конце прокрутки плашка не заходила на то, что хост ставит после блока. Трек и
+ * диапазоны прокрутки не меняются. В статичной раскладке запаса нет.
  */
 @supports (height: 100lvh) {
-  .process:not(.list) .stage {
+  .process:not(.list) {
     --aic-ip-ui-gap: calc(100lvh - 100svh);
+
+    padding-bottom: var(--aic-ip-ui-gap);
   }
 }
 
@@ -1062,8 +1063,8 @@
 /*
  * Наезд плашки ведёт браузер: сдвиг от скрипта по событию scroll приходит на кадр позже прокрутки,
  * и при инерции пальца плашка замирает и прыгает. При поддержке scroll-driven animations сдвиг и
- * --aic-ip-morph идут анимацией на scroll(root) по границам и режиму из hooks/use-scroll-steps.ts.
- * Только под @supports: без поддержки animation с fill both встала бы в конечный кадр.
+ * вкладка идут анимациями на scroll(root) по границам и режиму из hooks/use-scroll-steps.ts. Только
+ * под @supports: без поддержки animation с fill both встала бы в конечный кадр.
  */
 @property --aic-ip-morph {
   syntax: '<number>';
@@ -1092,35 +1093,74 @@
   }
 }
 
-@keyframes morph-share {
+/*
+ * Скругление, свечение и тень плашки на наезде без пересчёта всего поддерева в каждом кадре:
+ * свечение и тень — на подложках .frame::before и ::after, их прозрачность ведёт композитор;
+ * скругление — ненаследуемое --aic-ip-card-round ступенями по 1px, 8 перерисовок за наезд. Верх
+ * плашки в кадре (--aic-ip-card-top) ставит hooks/use-scroll-steps.ts.
+ */
+@property --aic-ip-card-round {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
+}
+
+@keyframes card-round {
   from {
-    --aic-ip-morph: 0;
+    --aic-ip-card-round: 0;
   }
 
   to {
-    --aic-ip-morph: 1;
+    --aic-ip-card-round: 1;
+  }
+}
+
+@keyframes fade-out {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
   }
 }
 
 /*
- * Производные reveal (вкладка, заголовок) ведёт зарегистрированное число --aic-ip-reveal-css, а не
- * анимация transform или opacity: та вынесла бы их в свой слой, и при масштабе меньше 1 Chrome
- * растеризует его мягче. Сама --aic-ip-reveal не регистрируется: её читает хост (INTEGRATION.md, п.
- * 9).
+ * Выезд вкладки ведёт анимация transform, её браузер отдаёт композитору. Анимацию
+ * зарегистрированного числа Chrome считает в основном потоке, и на слабом телефоне вкладка
+ * отставала бы от плашки.
  */
-@property --aic-ip-reveal-css {
-  syntax: '<number>';
-  inherits: true;
-  initial-value: 0;
-}
-
-@keyframes reveal-share {
+@keyframes tab-out {
   from {
-    --aic-ip-reveal-css: 0;
+    transform: translateY(var(--aic-ip-tab-overlap));
   }
 
   to {
-    --aic-ip-reveal-css: 1;
+    transform: translateY(0);
+  }
+}
+
+/*
+ * Поле над колодой в покое здесь — сдвиг окна содержимого через translate: margin-top менял бы
+ * раскладку плашки в каждом кадре наезда.
+ */
+@keyframes body-lift {
+  from {
+    translate: 0 calc(48px - var(--aic-ip-body-gap));
+  }
+
+  to {
+    translate: 0 0;
   }
 }
 
@@ -1138,25 +1178,90 @@
 
   [data-aic-ip-scroll-driven] .process:not(.list) .frame {
     transform: scale(var(--aic-ip-scale, 1));
-    animation: morph-share linear both;
+  }
+
+  /*
+   * Скругление плашки и обеих подложек — одно ступенчатое число, у каждой своё (не наследуется):
+   * тень ложится ровно по краю плашки, без серого серпа в углу и без просвета.
+   */
+  [data-aic-ip-scroll-driven] .process:not(.list) .card,
+  [data-aic-ip-scroll-driven] .process:not(.list) .frame::before,
+  [data-aic-ip-scroll-driven] .process:not(.list) .frame::after {
+    border-radius: calc(
+        (24px + (var(--aic-ip-card-r) - 24px) * var(--aic-ip-card-round)) / var(--aic-ip-scale, 1)
+      )
+      calc(
+        (24px + (var(--aic-ip-card-r) - 24px) * var(--aic-ip-card-round)) / var(--aic-ip-scale, 1)
+      )
+      0 0;
+  }
+
+  [data-aic-ip-scroll-driven] .process:not(.list) .card {
+    box-shadow: none;
+    animation: card-round steps(8, jump-none) both;
     animation-timeline: scroll(root);
     animation-range: var(--aic-ip-morph-from) var(--aic-ip-morph-to);
   }
 
-  [data-aic-ip-scroll-driven='reveal'] .process:not(.list) .tab {
-    transform: translateY(calc(var(--aic-ip-tab-overlap) * (1 - var(--aic-ip-reveal-css))));
-    animation: reveal-share linear both;
+  [data-aic-ip-scroll-driven] .process:not(.list) .frame::before,
+  [data-aic-ip-scroll-driven] .process:not(.list) .frame::after {
+    position: absolute;
+    top: var(--aic-ip-card-top, 0px);
+    bottom: calc(-1 * var(--aic-ip-ui-gap, 0px) / var(--aic-ip-scale, 1));
+    left: 50%;
+    z-index: 1;
+    width: calc(100% / var(--aic-ip-scale, 1));
+    margin-left: calc(-50% / var(--aic-ip-scale, 1));
+    content: '';
+    pointer-events: none;
+    animation-timing-function: linear, steps(8, jump-none);
+    animation-fill-mode: both;
+    animation-timeline: scroll(root), scroll(root);
+    animation-range:
+      var(--aic-ip-morph-from) var(--aic-ip-morph-to),
+      var(--aic-ip-morph-from) var(--aic-ip-morph-to);
+  }
+
+  /* Свечение корешка. */
+  [data-aic-ip-scroll-driven] .process:not(.list) .frame::before {
+    box-shadow: 0 0 30px rgba(255, 221, 45, 0.9);
+    animation-name: fade-out, card-round;
+  }
+
+  /* Тень плашки на месте. */
+  [data-aic-ip-scroll-driven] .process:not(.list) .frame::after {
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.3);
+    animation-name: fade-in, card-round;
+  }
+
+  [data-aic-ip-scroll-driven] .process:not(.list) .body {
+    margin-top: 0;
+  }
+
+  /*
+   * Вкладка и окно содержимого анимируются только на наезде (атрибут data-aic-ip-morphing на корне
+   * ставит скрипт): в шагах у них нет своего слоя, и текст в уменьшенной сцене остаётся резким.
+   * Заполнение только назад: базовое значение равно концу анимации, снятие атрибута ничего не
+   * сдвигает.
+   */
+  [data-aic-ip-scroll-driven][data-aic-ip-morphing] .process:not(.list) .scroller {
+    animation: body-lift linear backwards;
+    animation-timeline: scroll(root);
+    animation-range: var(--aic-ip-morph-from) var(--aic-ip-morph-to);
+  }
+
+  [data-aic-ip-scroll-driven='reveal'][data-aic-ip-morphing] .process:not(.list) .tab {
+    animation: tab-out linear backwards;
     animation-timeline: scroll(root);
     animation-range: var(--aic-ip-reveal-from) var(--aic-ip-morph-to);
   }
 }
 
 /*
- * Ход подарков ведёт браузер: при быстром броске пальца скрипт догонял прокрутку по времени уже
- * после остановки, и содержимое дёргалось. При поддержке scroll-driven animations
- * --aic-ip-gift-scroll идёт от 0 до --aic-ip-gift-max на отрезке [--aic-ip-gift-from,
- * --aic-ip-gift-to]. Анимируется зарегистрированная переменная, а не transform: слой с масштабом
- * меньше 1 Chrome рисует мягче.
+ * Ход подарков ведёт браузер: скрипт по времени догонял быстрый бросок пальца уже после остановки.
+ * При поддержке scroll-driven animations на отрезке [--aic-ip-gift-from, --aic-ip-gift-to]
+ * анимируются transform содержимого и встречный translate индикатора — их ведёт композитор, без
+ * основного потока. Угасание у верха окна постоянное, чтобы маска не перерисовывалась в ходе.
  */
 @property --aic-ip-gift-scroll {
   syntax: '<length>';
@@ -1164,21 +1269,80 @@
   initial-value: 0px;
 }
 
-@keyframes gift-share {
+/*
+ * Разгон на [--aic-ip-gift-from, --aic-ip-gift-ease] по параболе y = x² (cubic-bezier(1/3, 0, 2/3,
+ * 1/3)), дальше ход с той же скоростью, без ступеньки (giftShare). Сдвиг — сумма двух анимаций с
+ * заполнением в обе стороны на разных свойствах или элементах: две анимации одного свойства одного
+ * элемента Chrome снимает с композитора.
+ */
+@keyframes gift-ease {
   from {
-    --aic-ip-gift-scroll: 0px;
+    translate: 0 0;
   }
 
   to {
-    --aic-ip-gift-scroll: var(--aic-ip-gift-max, 0px);
+    translate: 0 calc(-1 * var(--aic-ip-gift-ease-max, 0px));
+  }
+}
+
+@keyframes gift-share {
+  from {
+    transform: translateY(0);
+  }
+
+  to {
+    transform: translateY(calc(var(--aic-ip-gift-ease-max, 0px) - var(--aic-ip-gift-max, 0px)));
+  }
+}
+
+/* Встречный сдвиг индикатора: разгон — на самом индикаторе, ход — на его пунктах. */
+@keyframes gift-ease-back {
+  from {
+    translate: 0 0;
+  }
+
+  to {
+    translate: 0 var(--aic-ip-gift-ease-max, 0px);
+  }
+}
+
+@keyframes gift-share-back {
+  from {
+    translate: 0 0;
+  }
+
+  to {
+    translate: 0 calc(var(--aic-ip-gift-max, 0px) - var(--aic-ip-gift-ease-max, 0px));
   }
 }
 
 @supports (animation-timeline: scroll()) {
   [data-aic-ip-scroll-driven] .process:not(.list) .scroller-gift {
-    animation: gift-share linear both;
+    --aic-ip-scroll-fade: var(--aic-ip-scroll-fade-max);
+  }
+
+  [data-aic-ip-scroll-driven] .process:not(.list) .scroller-gift .scroll-content {
+    animation:
+      gift-ease cubic-bezier(0.3333, 0, 0.6667, 0.3333) both,
+      gift-share linear both;
+    animation-timeline: scroll(root), scroll(root);
+    animation-range:
+      var(--aic-ip-gift-from) var(--aic-ip-gift-ease),
+      var(--aic-ip-gift-ease) var(--aic-ip-gift-to);
+  }
+
+  [data-aic-ip-scroll-driven] .process:not(.list) .scroller-gift .progress {
+    animation: gift-ease-back cubic-bezier(0.3333, 0, 0.6667, 0.3333) both;
     animation-timeline: scroll(root);
-    animation-range: var(--aic-ip-gift-from) var(--aic-ip-gift-to);
+    animation-range: var(--aic-ip-gift-from) var(--aic-ip-gift-ease);
+  }
+
+  /* Ход — на пунктах индикатора, а не на обёртке колоды: анимация обёртки делала её контекстом
+     наложения, и подарки ложились поверх точек и маркера индикатора. */
+  [data-aic-ip-scroll-driven] .process:not(.list) .scroller-gift .progress-item {
+    animation: gift-share-back linear both;
+    animation-timeline: scroll(root);
+    animation-range: var(--aic-ip-gift-ease) var(--aic-ip-gift-to);
   }
 }
 

@@ -12,15 +12,10 @@
   --aic-ip-hero-gap-min: 9px;
 
   /*
-   * Первый экран стоит на месте, белая плашка второго раздела наезжает на него снизу. Экран
-   * закреплён под шапкой хоста на всё время блока, раздел шагов идёт поверх (он позже в потоке).
-   * Если экран выше окна (короткое окно, масштаб у предела), он сначала прокручивается до своего
-   * низа, чтобы кнопка формы была видна до наезда: top = min(шапка, окно − высота экрана).
-   * --aic-ip-hero-h ставит hooks/use-first-screen-fit.ts. В статичной раскладке шагов (sticky у
-   * хоста не работает) закрепление тоже не срабатывает, экран прокручивается вместе со страницей.
-   * Пока фокус в форме, экран идёт вместе с документом: верх закрепления поднят на
-   * --aic-ip-hero-lift (ставит hooks/use-scroll-steps.ts, иначе 0), чтобы плашка не наехала на
-   * поле, когда iOS прокручивает документ к полю над клавиатурой.
+   * Первый экран закреплён под шапкой хоста, белая плашка шагов наезжает на него снизу. Если экран
+   * выше окна, он сначала докручивается до низа, чтобы кнопка формы была видна: top = min(шапка,
+   * окно − высота экрана). При открытой клавиатуре верх закрепления поднят на --aic-ip-hero-lift,
+   * чтобы плашка не наехала на поле. В статичной раскладке шагов закрепления нет.
    */
   position: sticky;
   top: calc(
@@ -73,31 +68,44 @@
  * включает скрипт атрибутом data-aic-ip-scroll-driven="reveal" на корне. Переменная --aic-ip-reveal
  * на корне остаётся: её читает шапка хоста (INTEGRATION.md, п. 9).
  */
-/* --aic-ip-reveal-css зарегистрировано в process/styles.module.css (там же почему число). */
-@keyframes reveal-share {
+/*
+ * Анимируются только opacity и filter: их браузер отдаёт композитору. Зарегистрированное число вело
+ * бы перерисовку заголовка с размытием в каждом кадре наезда в основном потоке, и на слабых Android
+ * наезд шёл бы рывками.
+ */
+@keyframes hero-veil {
   from {
-    --aic-ip-reveal-css: 0;
+    opacity: 0;
   }
 
   to {
-    --aic-ip-reveal-css: 1;
+    opacity: 1;
+  }
+}
+
+@keyframes hero-title-out {
+  from {
+    opacity: 1;
+    filter: blur(0);
+  }
+
+  to {
+    opacity: 0;
+    filter: blur(8px);
   }
 }
 
 @supports (animation-timeline: scroll()) {
-  [data-aic-ip-scroll-driven='reveal'] .hero {
-    animation: reveal-share linear both;
+  [data-aic-ip-scroll-driven='reveal'] .hero::after {
+    animation: hero-veil linear both;
     animation-timeline: scroll(root);
     animation-range: var(--aic-ip-reveal-from) var(--aic-ip-morph-to);
   }
 
-  [data-aic-ip-scroll-driven='reveal'] .hero::after {
-    opacity: var(--aic-ip-reveal-css);
-  }
-
   [data-aic-ip-scroll-driven='reveal'] .title {
-    opacity: calc(1 - var(--aic-ip-reveal-css));
-    filter: blur(calc(var(--aic-ip-reveal-css) * 8px));
+    animation: hero-title-out linear both;
+    animation-timeline: scroll(root);
+    animation-range: var(--aic-ip-reveal-from) var(--aic-ip-morph-to);
   }
 }
 

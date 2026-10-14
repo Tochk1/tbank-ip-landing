@@ -3,8 +3,8 @@
  * --aic-ip-text-min / --aic-ip-text-body (12px / 15px = 0.8), переменные корня блока. Ниже предела
  * композиция не сжимается, страница прокручивается.
  */
-export const minScaleFrom = (style: CSSStyleDeclaration): number => {
-  const min = parseFloat(style.getPropertyValue('--aic-ip-text-min'));
+export const minScaleFrom = (style: CSSStyleDeclaration, minName = '--aic-ip-text-min'): number => {
+  const min = parseFloat(style.getPropertyValue(minName));
   const body = parseFloat(style.getPropertyValue('--aic-ip-text-body'));
   return min > 0 && body > 0 ? Math.min(1, min / body) : 1;
 };
@@ -73,9 +73,8 @@ export type FirstScreenFit = {
 
 /**
  * Первый экран целиком в окне вместе с корешком: место под содержимое — окно − шапка − корешок.
- * Сначала отступы сжимаются пропорционально, от отступов макета до minGap; если и этого мало,
- * содержимое масштабируется, не ниже minScale. При окне макета доля отступов 1 и масштаб 1: экран
- * как в макете.
+ * Сначала отступы сжимаются пропорционально до minGap, потом содержимое масштабируется не ниже
+ * minScale (у первого экрана свой предел, --aic-ip-text-min-hero). При окне макета масштаб 1.
  */
 export const fitFirstScreen = ({
   room,

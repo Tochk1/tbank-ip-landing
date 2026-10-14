@@ -42,6 +42,12 @@
    * предел = --aic-ip-text-min / --aic-ip-text-body (lib/fit.ts, minScaleFrom).
    */
   --aic-ip-text-min: 12px;
+  /*
+   * Предел для первого экрана ниже: заголовок «Как происходит оформление?» в корешке должен быть
+   * виден при загрузке. Сначала экран сжимается до 12px, и только если корешок всё равно уходит за
+   * низ окна (высокая форма, короткое окно Android), — до 10px. Дальше страница прокручивается.
+   */
+  --aic-ip-text-min-hero: 10px;
   --aic-ip-text-body: 15px;
   --aic-ip-font-heading:
     'dsHeading', 'dsHeading Fallback', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue',

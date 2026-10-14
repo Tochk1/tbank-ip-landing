@@ -24,6 +24,13 @@ const GIFT_READ_MS = 1200;
 const KEYBOARD_MIN = 160;
 
 /**
+ * Насколько должна сдвинуться граница диапазона scroll-driven анимации, px прокрутки, чтобы скрипт
+ * её переписал (см. setRange). Меньше пикселя ход на глаз не меняет, а дрожь замера между кадрами —
+ * сотые и десятые доли пикселя.
+ */
+const RANGE_STEP = 0.5;
+
+/**
  * Открыта ли экранная клавиатура: visual viewport ниже окна на KEYBOARD_MIN. Способность
  * окна, а не платформа — на десктопе клавиатуры нет и быть не может, проверка там всегда
  * ложна. Без visualViewport (старые движки) подъёма тоже нет: он нужен только мобильным.
@@ -375,8 +382,8 @@ export const useScrollSteps = (statesCount: number, withCta: boolean) => {
         const base =
           geometry.trackRect.top - (section ? ownShiftY(section) : 0) + window.scrollY - stickTop;
         const from = base + start + geometry.pause;
-        setRoot('--aic-ip-gift-from', scrollPx(from));
-        setRoot('--aic-ip-gift-to', scrollPx(from + reach));
+        setRange('--aic-ip-gift-from', from);
+        setRange('--aic-ip-gift-to', from + reach);
         set('--aic-ip-gift-max', `${overflow}px`);
         if (giftFrame) window.cancelAnimationFrame(giftFrame);
         giftFrame = 0;
@@ -501,6 +508,18 @@ export const useScrollSteps = (statesCount: number, withCta: boolean) => {
     /** Позиция прокрутки в px с точностью до сотой: границы диапазонов анимации. */
     const scrollPx = (value: number) => `${Math.round(value * 100) / 100}px`;
     /**
+     * Граница диапазона анимации на корне, px прокрутки. Переписывается только при сдвиге на
+     * RANGE_STEP и больше: иначе доли пикселя от округлений меняли бы её каждый кадр, а каждая
+     * запись в стиль корня пересчитывает стиль всего блока прямо во время хода, который ведёт
+     * браузер.
+     */
+    const setRange = (name: string, value: number) => {
+      if (!root) return;
+      const current = parseFloat(root.style.getPropertyValue(name));
+      if (Number.isFinite(current) && Math.abs(current - value) < RANGE_STEP) return;
+      root.style.setProperty(name, scrollPx(value));
+    };
+    /**
      * Производные reveal (фон второго экрана, гашение заголовка, вкладка) тоже ведёт браузер, пока
      * reveal — линейная функция прокрутки, то есть пока первый экран закреплён. Начало отрезка —
      * где верх плашки дошёл до края формы: t0 = (край − место плашки) × окно / (окно − morphD),
@@ -517,10 +536,7 @@ export const useScrollSteps = (statesCount: number, withCta: boolean) => {
         edge.getBoundingClientRect().top - hero.getBoundingClientRect().top + stick;
       const span = edgePinned - finalTop;
       if (span <= 1) return false;
-      setRoot(
-        '--aic-ip-reveal-from',
-        scrollPx(morphAt - (span * viewportH) / (viewportH - morphD))
-      );
+      setRange('--aic-ip-reveal-from', morphAt - (span * viewportH) / (viewportH - morphD));
       return true;
     };
     /**
@@ -575,8 +591,8 @@ export const useScrollSteps = (statesCount: number, withCta: boolean) => {
       // тогда и наезд остаётся за скриптом.
       if (driven && root && card) {
         morphAt = trackTop - ownShiftY(section) + window.scrollY;
-        setRoot('--aic-ip-morph-from', scrollPx(morphAt - viewportH));
-        setRoot('--aic-ip-morph-to', scrollPx(morphAt));
+        setRange('--aic-ip-morph-from', morphAt - viewportH);
+        setRange('--aic-ip-morph-to', morphAt);
         section.style.removeProperty('--aic-ip-morph');
       } else {
         const value = String(morph);
